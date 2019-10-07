@@ -24,6 +24,14 @@ import java.util.stream.Collectors;
             // System.out.println(content);
             JSONObject data = new JSONObject(content);
             System.out.println(data.getInt("total_count"));
+            JSONArray items = data.getJSONArray("items");
+            for (int it = 0; it < items.length(); it++) {
+                if (it == 0){
+                    JSONObject item = new JSONObject(items.get(it).toString());
+                    // System.out.println(items.get(it)); 
+                    System.out.println(item.getString("html_url")); 
+                }
+            }
 
 
         } catch (IOException e) {
