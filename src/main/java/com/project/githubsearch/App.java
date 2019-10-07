@@ -5,8 +5,13 @@ import org.json.JSONObject;
 import org.json.JSONArray;
 import org.json.JSONException;
 import java.util.stream.Stream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.Paths;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
 import java.util.stream.Collectors;
 
@@ -17,6 +22,7 @@ import java.util.stream.Collectors;
  public class App {
     public static void main(String[] args) {
         String path = "src/main/java/com/project/githubsearch/data/response1000items.txt";
+        String basePath = "src/main/java/com/project/githubsearch/files/"; 
         try (Stream<String> lines = Files.lines(Paths.get(path))) {
 
             // UNIX \n, WIndows \r\n
@@ -26,10 +32,15 @@ import java.util.stream.Collectors;
             System.out.println(data.getInt("total_count"));
             JSONArray items = data.getJSONArray("items");
             for (int it = 0; it < items.length(); it++) {
-                if (it == 0){
+                if (it == 1){
                     JSONObject item = new JSONObject(items.get(it).toString());
                     // System.out.println(items.get(it)); 
-                    System.out.println(item.getString("html_url")); 
+                    String html_url = item.getString("html_url");
+                    System.out.println("html_url");
+                    System.out.println(html_url);
+                    String download_url = convertHTMLUrlToDownloadUrl(html_url);
+                    System.out.println(download_url);
+
                 }
             }
 
@@ -37,6 +48,33 @@ import java.util.stream.Collectors;
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+    }
+
+
+    /**
+     * Convert github html url to download url
+     * input: https://github.com/shuchen007/ThinkInJavaMaven/blob/85b402a81fc0b3f2f039b34c23be416322ef14b4/src/main/java/sikaiClient/IScyxKtService.java
+     * output: https://raw.githubusercontent.com/shuchen007/ThinkInJavaMaven/85b402a81fc0b3f2f039b34c23be416322ef14b4/src/main/java/sikaiClient/IScyxKtService.java
+     */
+    private static String convertHTMLUrlToDownloadUrl(String html_url) {
+        String[] parts = html_url.split("/");
+        String download_url = "https://raw.githubusercontent.com/";
+        int l = parts.length;
+        for (int i = 0; i < l; i++) {
+            if (i >= 3) {
+                if (i != 5) {
+                    if (i != l - 1) {
+                        download_url = download_url.concat(parts[i] + '/');
+                    } else {
+                        download_url = download_url.concat(parts[i]);
+                    }
+                }
+            }
+        }
+        // System.out.println("download_url");
+        // System.out.println(download_url);
+        return download_url;
 
     }
 
