@@ -28,17 +28,17 @@ public class App {
     public static void main(String[] args) throws InterruptedException, IOException {
         // String basePath = "src/main/java/com/project/githubsearch/files/";
         
-        // String path = "src/main/java/com/project/githubsearch/data/response1000items.txt";
+        // String path = "src/main/java/com/project/githubsearch/data/response3000items.txt";
         
         // try (Stream<String> lines = Files.lines(Paths.get(path))) {
         //     // UNIX \n, WIndows \r\n
         //     String content = lines.collect(Collectors.joining(System.lineSeparator()));
-        //     // System.out.println(content);
-        //     JSONObject data = new JSONObject(content);
-        //     System.out.println(data.getInt("total_count"));
-        //     JSONArray items = data.getJSONArray("items");
+            
+        //     // parse json array
+        //     JSONArray items = new JSONArray(content);
         //     System.out.println("items.length()");
         //     System.out.println(items.length());
+
         //     for (int it = 0; it < items.length(); it++) {
         //         if (it == 0) {
         //             JSONObject item = new JSONObject(items.get(it).toString());
@@ -68,7 +68,6 @@ public class App {
         // }
 
         getData();
-
     }
 
 
@@ -103,9 +102,9 @@ public class App {
         int ABUSE_RATE_LIMITS = 403;
 
         String endpoint = "https://api.github.com/search/code";
-        String query = "java.lang.String#ReplaceAll";
+        String query = "java.lang.String.replaceAll";
         // String[] paths = { "app/src/", "src/", "lib/" };
-        String[] sizes = { "10000:50000", "<10000", ">50000" };
+        String[] sizes = { "10000..50000", "<10000", ">50000" };
         
 
         JSONArray result = new JSONArray();
@@ -121,20 +120,19 @@ public class App {
         for (int i = 0; i < sizes.length; i++) {
             String size = sizes[i];
             for (int j = 0; j < last_page; j++) {
+                page = j;
                 System.out.println("");
                 System.out.println("Iteration number: " + id++);
-                page = j;
-                String url = endpoint + "?"
-                                        + "&page=" + page
-                                        + "&per_page=" + per_page_limit
-                                        + "&q=" + query + "+in:file+language:java+extension:java+size:" + size;
-                                        
-                System.out.println("Url Query: " + url);
                 System.out.println("Size: " + size);
                 System.out.println("Page: " + page);
                 
-                HttpRequest request = HttpRequest.get(url).authorization("token " + OAUTH_TOKEN)
-                                .accept("application/vnd.github.v3.text-match+json");
+                HttpRequest request = HttpRequest.get(endpoint, false
+                                                        ,"q", query + "+in:file+language:java+extension:java+size:" + size
+                                                        ,"page", page
+                                                        ,"per_page", per_page_limit)
+                                                .authorization("token " + OAUTH_TOKEN)
+                                                .accept("application/vnd.github.v3.text-match+json");
+                System.out.println("Request: " + request);
                 
                 // handle response
                 int responseCode = request.code();
@@ -171,7 +169,7 @@ public class App {
         System.out.println("Total items for all requests: " + result.length());
 
         // Get the file reference
-        Path path = Paths.get("src/main/java/com/project/githubsearch/data/response.txt");
+        Path path = Paths.get("src/main/java/com/project/githubsearch/data/response.json");
         
         // Use try-with-resource to get auto-closeable writer instance
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
