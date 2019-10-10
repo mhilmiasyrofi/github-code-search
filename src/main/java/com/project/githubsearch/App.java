@@ -25,10 +25,34 @@ import java.util.stream.Collectors;
  *
  */
 public class App {
+
+    private static final String AUTH_TOKEN = "5a2446f46bc95d4b915ff8e14bc0efac1827072e";
+    // parameter for the request
+    private static String PARAM_QUERY = "q"; //$NON-NLS-1$
+    private static String PARAM_PAGE = "page"; //$NON-NLS-1$
+    private static String PARAM_PER_PAGE = "per_page"; //$NON-NLS-1$
+    
+    private static String ACCEPT_TEXT_MATCH = "application/vnd.github.v3.text-match+json";
+    
+    // some links from the response header
+    private static String META_REL = "rel"; //$NON-NLS-1$
+    private static String META_LAST = "last"; //$NON-NLS-1$
+    private static String META_NEXT = "next"; //$NON-NLS-1$
+    private static String META_FIRST = "first"; //$NON-NLS-1$
+    private static String META_PREV = "prev"; //$NON-NLS-1$
+    
+    private static final String DELIM_LINKS = ","; //$NON-NLS-1$
+    private static final String DELIM_LINK_PARAM = ";"; //$NON-NLS-1$
+        
+    private static final int BAD_CREDENTIAL = 401;
+    private static final int RESPONSE_OK = 200;
+    private static final int ABUSE_RATE_LIMITS = 403;
+
+
     public static void main(String[] args) throws InterruptedException, IOException {
         // String basePath = "src/main/java/com/project/githubsearch/files/";
         
-        // String path = "src/main/java/com/project/githubsearch/data/response3000items.txt";
+        // String path = "src/main/java/com/project/githubsearch/data/response3000items.json";
         
         // try (Stream<String> lines = Files.lines(Paths.get(path))) {
         //     // UNIX \n, WIndows \r\n
@@ -40,25 +64,28 @@ public class App {
         //     System.out.println(items.length());
 
         //     for (int it = 0; it < items.length(); it++) {
-        //         if (it == 0) {
+        //         if (it <= 100) {
         //             JSONObject item = new JSONObject(items.get(it).toString());
         //             String html_url = item.getString("html_url");
         //             String download_url = convertHTMLUrlToDownloadUrl(html_url);
         //             String fileName = item.getString("name").replace(".java", ".txt");
+        //             System.out.println("");
+        //             System.out.println(it);
+        //             System.out.println(html_url);
                     
-        //             try {
-        //                 // download file from url
-        //                 URL url;
-        //                 url = new URL(download_url);
-        //                 ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-        //                 String pathFile = new String(basePath + fileName);
-        //                 FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
-        //                 FileChannel fileChannel = fileOutputStream.getChannel();
-        //                 fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
-        //             } catch (MalformedURLException e) {
-        //                 // TODO Auto-generated catch block
-        //                 e.printStackTrace();
-        //             }
+        //             // try {
+        //             //     // download file from url
+        //             //     URL url;
+        //             //     url = new URL(download_url);
+        //             //     ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
+        //             //     String pathFile = new String(basePath + fileName);
+        //             //     FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
+        //             //     FileChannel fileChannel = fileOutputStream.getChannel();
+        //             //     fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+        //             // } catch (MalformedURLException e) {
+        //             //     // TODO Auto-generated catch block
+        //             //     e.printStackTrace();
+        //             // }
 
         //         }
         //     }
@@ -68,6 +95,7 @@ public class App {
         // }
 
         getData();
+
     }
 
 
@@ -96,11 +124,6 @@ public class App {
     }
 
     private static void getData() throws InterruptedException, IOException {
-        String OAUTH_TOKEN = "39bcdebc4dc9353757acf13dac3708b5460a5e80";
-        int BAD_CREDENTIAL = 401;
-        int RESPONSE_OK = 200;
-        int ABUSE_RATE_LIMITS = 403;
-
         String endpoint = "https://api.github.com/search/code";
         String query = "java.lang.String.replaceAll";
         // String[] paths = { "app/src/", "src/", "lib/" };
@@ -110,16 +133,16 @@ public class App {
         JSONArray result = new JSONArray();
 
         int per_page_limit = 100;
-        int page = 0;
-        int last_page = 10;
+        int page = 1;
+        int last_page = 2;
 
         System.out.println("Getting data from Github");
         System.out.println("with per page limit: " + per_page_limit);
         int id = 1;
 
-        for (int i = 0; i < sizes.length; i++) {
+        for (int i = 0; i < sizes.length; i++) { 
             String size = sizes[i];
-            for (int j = 0; j < last_page; j++) {
+            for (int j = 1; j <= last_page; j++) { // the page start at 1
                 page = j;
                 System.out.println("");
                 System.out.println("Iteration number: " + id++);
@@ -127,16 +150,19 @@ public class App {
                 System.out.println("Page: " + page);
                 
                 HttpRequest request = HttpRequest.get(endpoint, false
-                                                        ,"q", query + "+in:file+language:java+extension:java+size:" + size
-                                                        ,"page", page
-                                                        ,"per_page", per_page_limit)
-                                                .authorization("token " + OAUTH_TOKEN)
-                                                .accept("application/vnd.github.v3.text-match+json");
+                                                        , PARAM_QUERY, query + "+in:file+language:java+extension:java+size:" + size
+                                                        , PARAM_PAGE, page
+                                                        , PARAM_PER_PAGE, per_page_limit)
+                                                .authorization("token " + AUTH_TOKEN)
+                                                .accept(ACCEPT_TEXT_MATCH);
                 System.out.println("Request: " + request);
                 
                 // handle response
                 int responseCode = request.code();
                 if (responseCode == RESPONSE_OK) {
+                    // System.out.println("Response Headers: " + request.headers());
+                    System.out.println("Link: " + request.header("Link"));
+                    System.out.println("Next: " + getNextLinkFromResponse(request.header("Link")));
                     String responseBody = request.body();
                     JSONObject response = new JSONObject(responseBody);
                     JSONArray item = response.getJSONArray("items");
@@ -161,6 +187,7 @@ public class App {
                     j--; // retry current progress
                 } else {
                     System.out.println("Response Code: " + responseCode);
+                    System.out.println("Response Body: " + request.body());
                     System.out.println("Response Headers: " + request.headers());
                 }
             }
@@ -175,6 +202,39 @@ public class App {
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
             writer.write(result.toString());
         }
+    }
+
+    private static String getNextLinkFromResponse(String linkHeader) {
+        
+        String next = null;
+
+        if (linkHeader != null) {
+            String[] links = linkHeader.split(DELIM_LINKS);
+            for (String link : links) {
+                String[] segments = link.split(DELIM_LINK_PARAM);
+                if (segments.length < 2)
+                    continue;
+
+                String linkPart = segments[0].trim();
+                if (!linkPart.startsWith("<") || !linkPart.endsWith(">")) //$NON-NLS-1$ //$NON-NLS-2$
+                    continue;
+                linkPart = linkPart.substring(1, linkPart.length() - 1);
+
+                for (int i = 1; i < segments.length; i++) {
+                    String[] rel = segments[i].trim().split("="); //$NON-NLS-1$
+                    if (rel.length < 2 || !META_REL.equals(rel[0]))
+                        continue;
+
+                    String relValue = rel[1];
+                    if (relValue.startsWith("\"") && relValue.endsWith("\"")) //$NON-NLS-1$ //$NON-NLS-2$
+                        relValue = relValue.substring(1, relValue.length() - 1);
+
+                    if (META_NEXT.equals(relValue)) 
+                        next  = linkPart;
+                }
+            }
+        }
+        return next;
     }
 
     private static int getRandomNumberInRange(int min, int max) {
