@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.Instant;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -47,6 +49,8 @@ public class App {
     private static final int ABUSE_RATE_LIMITS = 403;
 
     public static void main(String[] args) throws InterruptedException, IOException {
+        Instant start = Instant.now();
+        
         // String basePath = "src/main/java/com/project/githubsearch/files/";
 
         // String path =
@@ -96,6 +100,13 @@ public class App {
 
         getData();
 
+        Instant finish = Instant.now();
+        long timeElapsed = Duration.between(start, finish).toMillis();
+
+        long minutes = (timeElapsed / 1000) / 60;
+        long seconds = (timeElapsed / 1000) % 60;
+
+        System.out.println("Elapsed time: " + minutes + " minutes " + seconds + " seconds");
     }
 
     /**
