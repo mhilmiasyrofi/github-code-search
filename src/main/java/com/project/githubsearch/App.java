@@ -1,28 +1,20 @@
 package com.project.githubsearch;
 
-import com.github.kevinsawicki.http.HttpRequest;
-import org.json.JSONObject;
-import org.omg.CORBA.Request;
-import org.json.JSONArray;
-import org.json.JSONException;
-import java.util.stream.Stream;
 import java.io.BufferedWriter;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
-import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
-import java.nio.channels.ReadableByteChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+
+import com.github.kevinsawicki.http.HttpRequest;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  * Github Search Engine
@@ -143,17 +135,14 @@ public class App {
         ArrayList<String> sizes = new ArrayList<String>();
         // int MAX_SIZE = 10000;
         int MAX_SIZE = 384000; // the max searchable size from github api
-        final int INITIAL_TOTAL_COUNT = 1001;
         final int TOTAL_COUNT_LIMIT = 1000;
         int INITIAL_INTERVAL = 2048;
-        String size = "";
         int lower_bound = 0;
         int total_count = 0;
         int dynamic_interval, upper_bound;
 
         JSONArray result = new JSONArray();
-        int total_items = 0;
-
+        
         int per_page_limit = 100;
         int page = 1;
 
@@ -162,16 +151,19 @@ public class App {
         showTotalItemsInAQuery(endpoint, query, page, per_page_limit);
 
         dynamic_interval = INITIAL_INTERVAL;
+        Response response = new Response();
         while (lower_bound < MAX_SIZE) {
             upper_bound = lower_bound + dynamic_interval;
-            total_count = getTotalCount(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+            response = handleRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+            total_count = response.getTotalCount();
     
             if (total_count < TOTAL_COUNT_LIMIT) { // create the dynamic range higher 
                 while (total_count < 200 && upper_bound < MAX_SIZE) {
                     dynamic_interval = dynamic_interval * 2;
                     upper_bound = lower_bound + dynamic_interval;
                     int prev_total_count = total_count;
-                    total_count = getTotalCount(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                    response = handleRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                    total_count = response.getTotalCount();
                     if (total_count > TOTAL_COUNT_LIMIT) {
                         total_count = prev_total_count;
                         dynamic_interval = (int) dynamic_interval / 2;
@@ -182,51 +174,80 @@ public class App {
                 do {
                     dynamic_interval = (int) dynamic_interval / 2;
                     upper_bound = lower_bound + dynamic_interval;
-                    total_count = getTotalCount(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                    response = handleRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                    total_count = response.getTotalCount();
+    
                 } while (total_count > TOTAL_COUNT_LIMIT);
             }
 
             System.out.println("");
             System.out.println("Lower bound: " + lower_bound);
             System.out.println("Upper bound: " + upper_bound);
-            System.out.println("Number items in this request: " + total_count);
+            System.out.println("Total count in this range size: " + total_count);
+
+            JSONArray item = response.getItem();
+            int current_page = 1;
+            System.out.println("Request: " + response.getUrlRequest());
+            System.out.println("Number items in current request, page  " + current_page + ": " + item.length());
+            for (int it = 0; it < item.length(); it++) {
+                JSONObject instance = new JSONObject(item.get(it).toString());
+                JSONObject obj = new JSONObject();
+                obj.put("html_url", instance.getString("html_url"));
+                obj.put("name", instance.getString("name"));
+                result.put(obj);
+            }
+
+            while (response.getNextUrlRequest() != null) {
+                response = handleRequestWithUrl(response.getNextUrlRequest());
+                item = response.getItem();
+                current_page++;
+                System.out.println("Request: " + response.getUrlRequest());
+                System.out.println("Number items in current request, page  " + current_page + ": " + item.length());
+                for (int it = 0; it < item.length(); it++) {
+                    JSONObject instance = new JSONObject(item.get(it).toString());
+                    JSONObject obj = new JSONObject();
+                    obj.put("html_url", instance.getString("html_url"));
+                    obj.put("name", instance.getString("name"));
+                    result.put(obj);
+                }
+            }
+
             
             lower_bound = upper_bound;
-            total_items += total_count;
         }
 
         System.out.println("");
         // System.out.println("Total items for all requests: " + result.length());
-        System.out.println("Total items for all requests: " + total_items);
+        System.out.println("Total items for all requests: " + result.length());
 
-        // // Get the file reference
-        // Path path = Paths.get("src/main/java/com/project/githubsearch/data/response.json");
+        // Get the file reference
+        Path path = Paths.get("src/main/java/com/project/githubsearch/data/response.json");
 
-        // // Use try-with-resource to get auto-closeable writer instance
-        // try (BufferedWriter writer = Files.newBufferedWriter(path)) {
-        //     writer.write(result.toString());
-        // }
+        // Use try-with-resource to get auto-closeable writer instance
+        try (BufferedWriter writer = Files.newBufferedWriter(path)) {
+            writer.write(result.toString());
+        }
     }
 
-    private static int getTotalCount(String endpoint, String query, int lower_bound, int upper_bound, int page, int per_page_limit) {
-        int total_count = -1;
-        upper_bound++;
-        lower_bound--;
-        String size = lower_bound + ".." + upper_bound;
-        do {
-            String url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:"
-                    + size + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
-            
+    private static Response handleRequestWithUrl(String url) {
+ 
+        boolean response_ok = false;
 
+        Response response = new Response();
+
+        do {
             HttpRequest request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN);
 
             // handle response
             int responseCode = request.code();
             if (responseCode == RESPONSE_OK) {
-                // System.out.println("Response Headers: " + request.headers());
-                String responseBody = request.body();
-                JSONObject response = new JSONObject(responseBody);
-                total_count = response.getInt("total_count");
+                response.setCode(responseCode);
+                JSONObject body = new JSONObject(request.body());
+                response.setTotalCount(body.getInt("total_count"));
+                response.setItem(body.getJSONArray("items"));
+                response.setUrlRequest(request.toString());
+                response.setNextUrlRequest(getNextLinkFromResponse(request.header("Link")));
+                response_ok = true;
             } else if (responseCode == BAD_CREDENTIAL) {
                 System.out.println("Authorization problem");
                 System.out.println("Please read the readme file!");
@@ -234,7 +255,7 @@ public class App {
                 System.exit(-1);
             } else if (responseCode == ABUSE_RATE_LIMITS) {
                 System.out.println("Abuse Rate Limits");
-                // retry current progress after wait for some seconds
+                // retry current progress after wait for a minute
                 String retryAfter = request.header("Retry-After");
                 try {
                     int sleepTime = 0; // wait for a while
@@ -255,9 +276,26 @@ public class App {
                 System.exit(-1);
             }
 
-        } while (total_count == -1);
+        } while (!response_ok);
 
-        return total_count;
+        return response;
+    }
+
+
+
+    private static Response handleRequest(String endpoint, String query, int lower_bound, int upper_bound, int page, int per_page_limit) {
+        // The size range is exclusive
+        upper_bound++; 
+        lower_bound--; 
+        String size = lower_bound + ".." + upper_bound; //  lower_bound < size < upper_bound
+        
+        String url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:"
+            + size + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;  
+        
+        Response response = new Response();
+        response = handleRequestWithUrl(url);
+       
+        return response;
     }
 
     private static void showTotalItemsInAQuery(String endpoint, String query, int page, int per_page_limit) {
