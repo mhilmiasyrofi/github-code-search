@@ -1,5 +1,4 @@
 package com.project.githubsearch;
-
 import org.json.JSONArray;
 
 public class Response {

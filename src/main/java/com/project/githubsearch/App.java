@@ -2,6 +2,8 @@ package com.project.githubsearch;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -9,6 +11,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.github.kevinsawicki.http.HttpRequest;
@@ -23,6 +27,8 @@ import org.json.JSONObject;
 public class App {
 
     private static final String AUTH_TOKEN = System.getenv("GITHUB_AUTH_TOKEN");
+    private static final String AUTH_TOKEN_2 = System.getenv("GITHUB_AUTH_TOKEN_2");
+    private static int lastToken = 1; 
     // parameter for the request
     private static String PARAM_QUERY = "q"; //$NON-NLS-1$
     private static String PARAM_PAGE = "page"; //$NON-NLS-1$
@@ -33,12 +39,20 @@ public class App {
     // links from the response header
     private static String META_REL = "rel"; //$NON-NLS-1$
     private static String META_NEXT = "next"; //$NON-NLS-1$
+    private static String META_LAST = "last"; //$NON-NLS-1$
     private static final String DELIM_LINKS = ","; //$NON-NLS-1$
     private static final String DELIM_LINK_PARAM = ";"; //$NON-NLS-1$
 
     private static final int BAD_CREDENTIAL = 401;
     private static final int RESPONSE_OK = 200;
     private static final int ABUSE_RATE_LIMITS = 403;
+
+    private static long elapsedTime = 0;
+    private static long counter = 0;
+
+    private static final int NUMBER_THREADS = 4;
+
+    private static SynchronizedData synchronizedData = new SynchronizedData();
 
     public static void main(String[] args) throws InterruptedException, IOException {
         Instant start = Instant.now();
@@ -92,6 +106,28 @@ public class App {
 
         getData();
 
+        // ExecutorService executor = Executors.newFixedThreadPool(MYTHREADS);
+        // String[] hostList = { "http://crunchify.com", "http://yahoo.com", "http://www.ebay.com", "http://google.com",
+        //         "http://www.example.co", "https://paypal.com", "http://bing.com/", "http://techcrunch.com/",
+        //         "http://mashable.com/", "http://thenextweb.com/", "http://wordpress.com/", "http://wordpress.org/",
+        //         "http://example.com/", "http://sjsu.edu/", "http://ebay.co.uk/", "http://google123.co.uk/",
+        //         "http://wikipedia.org/", "http://en.wikipedia.org" };
+
+        // for (int i = 0; i < hostList.length; i++) {
+
+        //     String url = hostList[i];
+        //     Runnable worker = new MyRunnable(url);
+        //     executor.execute(worker);
+        // }
+        // executor.shutdown();
+        // // Wait until all threads are finish
+        // while (!executor.isTerminated()) {
+
+        // }
+
+        // System.out.println(synchronizedData.getData().toString());
+        // System.out.println("\nFinished all threads");
+
         Instant finish = Instant.now();
         long timeElapsed = Duration.between(start, finish).toMillis();
 
@@ -100,6 +136,44 @@ public class App {
 
         System.out.println("Elapsed time: " + minutes + " minutes " + seconds + " seconds");
     }
+    
+    public static class URLRunnable implements Runnable {
+        private final String url;
+
+        URLRunnable(String url) {
+            this.url = url;
+        }
+
+        @Override
+        public void run() {
+            Response response = handleRequestWithUrl(url);
+            JSONArray item = response.getItem();
+            System.out.println("Request: " + response.getUrlRequest());
+            System.out.println("Number items: " + item.length());
+            synchronizedData.addArray(item);
+        }
+    }
+
+    public static class CustomizedURLRunnable implements Runnable {
+        private final String url;
+        
+        CustomizedURLRunnable(String endpoint, String query, int lower_bound, int upper_bound, int page, int per_page_limit) {
+            upper_bound++;lower_bound--;
+            String size = lower_bound + ".." + upper_bound; // lower_bound < size < upper_bound
+            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size
+                        + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
+        }
+
+        @Override
+        public void run() {
+            Response response = handleRequestWithUrl(url);
+            JSONArray item = response.getItem();
+            System.out.println("Request: " + response.getUrlRequest());
+            System.out.println("Number items: " + item.length());
+            synchronizedData.addArray(item);
+        }
+    }
+
 
     /**
      * Convert github html url to download url input:
@@ -129,11 +203,11 @@ public class App {
     private static void getData() throws InterruptedException, IOException {
         String endpoint = "https://api.github.com/search/code";
         // String query = "java.lang.String.replaceAll";
-        String query = "craeteFile";
-        // String query = "createConfigFile";
+        // String query = "craeteFile";
+        String query = "createConfigFile";
         // String query = "stringUrl";
+        // String query = "lihatData";
 
-        ArrayList<String> sizes = new ArrayList<String>();
         // int MAX_SIZE = 10000;
         int MAX_SIZE = 384000; // the max searchable size from github api
         final int TOTAL_COUNT_LIMIT = 1000;
@@ -141,8 +215,6 @@ public class App {
         int lower_bound = 0;
         int total_count = 0;
         int dynamic_interval, upper_bound;
-
-        JSONArray result = new JSONArray();
 
         int per_page_limit = 100;
         int page = 1;
@@ -155,41 +227,31 @@ public class App {
         System.out.println("MAIN QUERY");
         System.out.println("Request: " + firstResponse.getUrlRequest());
         System.out.println("Total items from github: " + firstResponse.getTotalCount());
-
+        System.out.println("");
+        
+        ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
+        
         if (firstResponse.getTotalCount() < 1000) {
 
             Response response = firstResponse;
             JSONArray item = response.getItem();
-            int current_page = 1;
             System.out.println("Request: " + response.getUrlRequest());
-            System.out.println("Number items in current request, page  " + current_page + ": " + item.length());
-            for (int it = 0; it < item.length(); it++) {
-                JSONObject instance = new JSONObject(item.get(it).toString());
-                JSONObject obj = new JSONObject();
-                obj.put("html_url", instance.getString("html_url"));
-                obj.put("name", instance.getString("name"));
-                result.put(obj);
-            }
+            System.out.println("Number items: " + item.length());
+            synchronizedData.addArray(item);
 
-            while (response.getNextUrlRequest() != null) {
-                response = handleRequestWithUrl(response.getNextUrlRequest());
-                item = response.getItem();
-                current_page++;
-                System.out.println("Request: " + response.getUrlRequest());
-                System.out.println("Number items in current request, page  " + current_page + ": " + item.length());
-                for (int it = 0; it < item.length(); it++) {
-                    JSONObject instance = new JSONObject(item.get(it).toString());
-                    JSONObject obj = new JSONObject();
-                    obj.put("html_url", instance.getString("html_url"));
-                    obj.put("name", instance.getString("name"));
-                    result.put(obj);
-                }
-            }
+            int lastPage = (int) Math.ceil(firstResponse.getTotalCount() / 100.0);
 
+            for (int j = 2; j <= lastPage; j++) {
+                page = j;
+                Runnable worker = new CustomizedURLRunnable(endpoint, query, 0, MAX_SIZE, page, per_page_limit);
+                executor.execute(worker);
+            }
+            
         } else {
             dynamic_interval = INITIAL_INTERVAL;
             Response response = new Response();
             while (lower_bound < MAX_SIZE) {
+                page = 1;
                 upper_bound = lower_bound + dynamic_interval;
                 response = handleRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
                 total_count = response.getTotalCount();
@@ -223,46 +285,39 @@ public class App {
                 System.out.println("Total count in this range size: " + total_count);
 
                 JSONArray item = response.getItem();
-                int current_page = 1;
                 System.out.println("Request: " + response.getUrlRequest());
-                System.out.println("Number items in current request, page  " + current_page + ": " + item.length());
-                for (int it = 0; it < item.length(); it++) {
-                    JSONObject instance = new JSONObject(item.get(it).toString());
-                    JSONObject obj = new JSONObject();
-                    obj.put("html_url", instance.getString("html_url"));
-                    obj.put("name", instance.getString("name"));
-                    result.put(obj);
-                }
+                System.out.println("Number items: " + item.length());
+                synchronizedData.addArray(item);
 
-                while (response.getNextUrlRequest() != null) {
-                    response = handleRequestWithUrl(response.getNextUrlRequest());
-                    item = response.getItem();
-                    current_page++;
-                    System.out.println("Request: " + response.getUrlRequest());
-                    System.out.println("Number items in current request, page  " + current_page + ": " + item.length());
-                    for (int it = 0; it < item.length(); it++) {
-                        JSONObject instance = new JSONObject(item.get(it).toString());
-                        JSONObject obj = new JSONObject();
-                        obj.put("html_url", instance.getString("html_url"));
-                        obj.put("name", instance.getString("name"));
-                        result.put(obj);
-                    }
+                int lastPage = (int) Math.ceil(total_count / 100.0);
+
+                for (int j = 2; j <= lastPage; j++) {
+                    page = j;
+                    Runnable worker = new CustomizedURLRunnable(endpoint, query, lower_bound, upper_bound, page,
+                            per_page_limit);
+                    executor.execute(worker);
                 }
 
                 lower_bound = upper_bound;
             }
         }
 
+        executor.shutdown();
+        // Wait until all threads are finish
+        while (!executor.isTerminated()) {
+
+        }
+        System.out.println("\nFinished all threads");
+
         System.out.println("");
-        // System.out.println("Total items for all requests: " + result.length());
-        System.out.println("Total items for all requests: " + result.length());
+        System.out.println("Total items for all requests: " + synchronizedData.getData().length());
 
         // Get the file reference
         Path path = Paths.get("src/main/java/com/project/githubsearch/data/response.json");
 
         // Use try-with-resource to get auto-closeable writer instance
         try (BufferedWriter writer = Files.newBufferedWriter(path)) {
-            writer.write(result.toString());
+            writer.write(synchronizedData.getData().toString());
         }
     }
 
@@ -273,11 +328,21 @@ public class App {
         Response response = new Response();
 
         do {
-            HttpRequest request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN);
+            
+            HttpRequest request;
+            
+            if (lastToken == 1) {
+                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN);
+                lastToken = 2;
+            } else {
+                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN_2);
+                lastToken = 1;
+            }
 
             // handle response
             int responseCode = request.code();
             if (responseCode == RESPONSE_OK) {
+                // System.out.println("Header: " + request.headers());
                 response.setCode(responseCode);
                 JSONObject body = new JSONObject(request.body());
                 response.setTotalCount(body.getInt("total_count"));
@@ -413,6 +478,39 @@ public class App {
                         relValue = relValue.substring(1, relValue.length() - 1);
 
                     if (META_NEXT.equals(relValue))
+                        next = linkPart;
+                }
+            }
+        }
+        return next;
+    }
+
+    private static String getLastLinkFromResponse(String linkHeader) {
+
+        String next = null;
+
+        if (linkHeader != null) {
+            String[] links = linkHeader.split(DELIM_LINKS);
+            for (String link : links) {
+                String[] segments = link.split(DELIM_LINK_PARAM);
+                if (segments.length < 2)
+                    continue;
+
+                String linkPart = segments[0].trim();
+                if (!linkPart.startsWith("<") || !linkPart.endsWith(">")) //$NON-NLS-1$ //$NON-NLS-2$
+                    continue;
+                linkPart = linkPart.substring(1, linkPart.length() - 1);
+
+                for (int i = 1; i < segments.length; i++) {
+                    String[] rel = segments[i].trim().split("="); //$NON-NLS-1$
+                    if (rel.length < 2 || !META_REL.equals(rel[0]))
+                        continue;
+
+                    String relValue = rel[1];
+                    if (relValue.startsWith("\"") && relValue.endsWith("\"")) //$NON-NLS-1$ //$NON-NLS-2$
+                        relValue = relValue.substring(1, relValue.length() - 1);
+
+                    if (META_LAST.equals(relValue))
                         next = linkPart;
                 }
             }
