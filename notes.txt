@@ -1,0 +1,261 @@
+Ferian token: 58b463f9da31eacf6b80a0bf7f12db25701c94eb
+
+[DONE] if the number of items are up to 1000, we do not use file size?
+
+search files that has usage of of java.lang.String#replaceAll.. we need type resolution for this.. your code might look like this: String s = ...; s.replaceAll(...); We need to know that s is of type java.lang.String.
+
+So the input is a java file that contain substring replaceAll
+
+Then the expected output is every variable that is the instance of a string that call replaceAll method?
+
+check the number and type of the parameters
+-- number of parameters, like say replaceAll(a,b) vs replaceAll(a,b,c)
+
+Actually, it might not even have to be a variable. You might also have x.getY().replaceAll since x.getY() returns java.lang.String
+
+not exactly string. It can be any object like java.lang.List, depending on the query. Field is also possible. Basically, when we see a call of replaceAll, we want to check whether this call is from the object that we queried for.
+
+KOENTCJI: What type we are looking for, depends on the user input
+
+
+
+Menurut saya, permasalahan ini tidak cocok diselesaikan secara parallel dengan alasan berikut:
+- Dengan parallel programming, pasti ada suatu proses yang akan kita partisi menjadi subtask yang akan dikerjakan oleh masing2 processor. Sebuah kutipan dari java docs "One important technique for achieving maximal performance in parallel programming is the ability to split intensive tasks into chunks that can be performed in parallel to maximize the use of computational power.". Jika kita menggunakan dynamic range, range size tidak bisa dipartisi karena pencarian rangenya bergantung pada hasil range sebelumnya. Satu hal yang bisa dipartisi hanya page. Untuk query pada setiap range, page bisa dibagi. Namun karena pagenya berkisar 1-10, sepertinya kurang optimal.
+
+
+Btw saya tadi tertarik untuk mengetahui berapa waktu yang dibutuhkan untuk satu kali request dan batasan request sampai mendapat "Abuse Rate Limit". 
+Awalnya saya mengira "Abuse Rate Limit" didapat ketika melakuakan request ke-31 dalam menit yang sama. Ternyata setelah saya mencoba, tidak seperti itu. Bahkan hanya dengan melakukan request < 10, sudah mendapatkan "Abuse Rate Limits". Tidak ada request yang mencapai lebih dari 10 kali dalam satu menit. Satu request membutuhkan waktu rata-rata selama 2,293 detik.
+
+
+Do you mean like this?
+
+=============================
+Statement: strtemp.equals(res)
+Method: equals
+Type:java.lang.String
+Number of Arguments: 1
+Arguments: [res]
+Arguments 0 type: java.lang.Object
+Location:(line 176,col 11)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/ui_PlmHtmlEditorKit.txt
+
+=============================
+Statement: res.toString()
+Method: toString
+Type:java.lang.String
+Number of Arguments: 0
+Arguments: []
+Location:(line 177,col 13)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/ui_PlmHtmlEditorKit.txt
+
+=============================
+Statement: res.replaceAll("(?s)\\[!" + cl + "\\](.*?)\\[/!\\]", "\\[!#\\]$1\\[/!\\]")
+Method: replaceAll
+Type:java.lang.String
+Number of Arguments: 2
+Arguments: ["(?s)\\[!" + cl + "\\](.*?)\\[/!\\]", "\\[!#\\]$1\\[/!\\]"]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.String
+Location:(line 179,col 12)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/ui_PlmHtmlEditorKit.txt
+
+
+
+The java type resolution work well on java built in library. But, There are some limitation on the type resolution:
+1. Limitation on specific method (hand-crafted method). Why? Although the github give the url link to download a complete repo, but I think it isn't a worth thing to do to download the repo. We just need a specific file which contain the query. Then the problem comes when the java symbol solver try to resolve the unimportant method that defined on the other files.
+I give you an example:
+Error: getConf()
+UnsolvedSymbolException{context='null', name='We are unable to find the method declaration corresponding to getConf()', cause='null'}
+
+2. 
+
+
+Yes it works for the complex one. As long as the class and its package are identified by symbol solver.
+This is the example
+
+=============================
+Statement: Normalizer.normalize(string, Normalizer.Form.NFKC)
+Method: normalize
+Type:java.text.Normalizer
+Number of Arguments: 2
+Arguments: [string, Normalizer.Form.NFKC]
+Arguments 0 type: java.lang.CharSequence
+Arguments 1 type: java.text.Normalizer.Form
+Location:(line 362,col 16)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+=============================
+Statement: Normalizer.normalize(string, Normalizer.Form.NFKC).replaceAll("[àáâãäåāąă]", "a").replaceAll("[çćčĉċ]", "c").replaceAll("[ďđð]", "d").replaceAll("[èéêëēęěĕė]", "e").replaceAll("[ƒſ]", "f").replaceAll("[ĝğġģ]", "g").replaceAll("[ĥħ]", "h").replaceAll("[ìíîïīĩĭįı]", "i").replaceAll("[ĳĵ]", "j").replaceAll("[ķĸ]", "k").replaceAll("[łľĺļŀ]", "l").replaceAll("[ñńňņŉŋ]", "n").replaceAll("[òóôõöøōőŏœ]", "o").replaceAll("[Þþ]", "p").replaceAll("[ŕřŗ]", "r").replaceAll("[śšşŝș]", "s").replaceAll("[ťţŧț]", "t").replaceAll("[ùúûüūůűŭũų]", "u").replaceAll("[ŵ]", "w").replaceAll("[ýÿŷ]", "y")
+Method: replaceAll
+Type:java.lang.String
+Number of Arguments: 2
+Arguments: ["[ýÿŷ]", "y"]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.String
+Location:(line 362,col 16)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+
+Yeah I know we can query to maven. The problem is how to get the package name from the undefined type. I give you the real use case. 
+
+Error: Messages.current()
+UnsolvedSymbolException{context='Messages.current()', name='Messages', cause='UnsolvedSymbolException{context='Messages', name='Solving Messages', cause='null'}'}
+
+The "Message" type can't be solved. When I look the file, it was imported from "import play.i18n.Messages;". So the problem is knowing the library for this one. After know the library we can query to maven. 
+	
+
+Yes, I use try catch block, we can ignore the condition as an exception.
+
+
+Yes it can. The symbol sovler will solve from the outer method. You can check in the field "Arguments"
+
+=============================
+Statement: Normalizer.normalize(string, Normalizer.Form.NFKC).replaceAll("[àáâãäåāąă]", "a").replaceAll("[çćčĉċ]", "c").replaceAll("[ďđð]", "d")
+Method: replaceAll
+Type:java.lang.String
+Number of Arguments: 2
+Arguments: ["[ďđð]", "d"]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.String
+Location:(line 362,col 16)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+=============================
+Statement: Normalizer.normalize(string, Normalizer.Form.NFKC).replaceAll("[àáâãäåāąă]", "a").replaceAll("[çćčĉċ]", "c")
+Method: replaceAll
+Type:java.lang.String
+Number of Arguments: 2
+Arguments: ["[çćčĉċ]", "c"]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.String
+Location:(line 362,col 16)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+=============================
+Statement: Normalizer.normalize(string, Normalizer.Form.NFKC).replaceAll("[àáâãäåāąă]", "a")
+Method: replaceAll
+Type:java.lang.String
+Number of Arguments: 2
+Arguments: ["[àáâãäåāąă]", "a"]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.String
+Location:(line 362,col 16)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+
+Yes it can also, I try to change some the source code with this
+
+string = noAccents(string);
+StringBuffer sb = new StringBuffer("-");
+string = string.replaceAll("[^\\w ]", "").replaceAll("-{2,}", sb.toString());
+
+This is the result
+
+=============================
+Statement: string.replaceAll("[^\\w ]", "").replaceAll("-{2,}", sb.toString())
+Method: replaceAll
+Type:java.lang.String
+Number of Arguments: 2
+Arguments: ["-{2,}", sb.toString()]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.String
+Location:(line 383,col 18)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+Can I just focus on the query? I mean we make sure that the package can resolve the type that is used in query only, not everything in the file.
+
+it resolving anything in the file, but we can ignore it if the symbol solver can't resolve it
+
+
+This is the scenario.
+First I have a source code that is a result of github search api.
+It contains this line of codes 
+
+==== code start
+...
+import groovy.lang.Closure;
+...
+
+public static String toString(Closure closure) {
+    PrintWriter oldWriter = (PrintWriter) closure.getProperty("out");
+    StringWriter newWriter = new StringWriter();
+    closure.setProperty("out", new PrintWriter(newWriter));
+    closure.call();
+    closure.setProperty("out", oldWriter);
+    return newWriter.toString();
+}
+...
+==== code end
+
+I got an error while resolving the variable "closure". The error shows this stuff
+
+Error: closure.setProperty("out", new PrintWriter(newWriter))
+UnsolvedSymbolException{context='closure.setProperty("out", new PrintWriter(newWriter))', name='closure', cause='UnsolvedSymbolException{context='null', name='Closure', cause='null'}'}
+
+The problem is caused by UnsolvedSymbolException Closure. Then I add the the groovy jar library which I get from the groovy latest maven package. The symbol solver can solve it. This is the output
+
+=============================
+Statement: closure.setProperty("out", new PrintWriter(newWriter))
+Method: setProperty
+Type:groovy.lang.Closure
+Number of Arguments: 2
+Arguments: ["out", new PrintWriter(newWriter)]
+Arguments 0 type: java.lang.String
+Arguments 1 type: java.lang.Object
+Location:(line 75,col 13)
+File:/home/mhilmiasyrofi/Documents/github-code-search/src/main/java/com/project/githubsearch/files/gtengine_JavaExtensions.txt
+
+we must know the a first for the statement like that.
+
+For better support of code compiling.
+
+How I download the jar automatically?
+*-1-* First I get list of packages from the file
+
+File: src/main/java/com/project/githubsearch/files/hg5_HomeGuardApp.txt
+Package:
+cz.martlin.hg5
+cz.martlin
+cz
+java.io.File
+java.io
+java
+java.io.Serializable
+java.io
+java
+javax.naming.InitialContext
+javax.naming
+javax
+org.apache.logging.log4j.LogManager
+org.apache.logging.log4j
+org.apache.logging
+org.apache
+org
+org.apache.logging.log4j.Logger
+org.apache.logging.log4j
+org.apache.logging
+org.apache
+org
+
+*-2-* Then remove the first package, and its base. i.e. cz.martlin.hg5 (and cz.martlin and cz) is removed because it's a project package. We can't get it from maven repository.
+We can also remove the java library because symbol solver use it automatically.
+
+
+*-3-* The remained packages must be solved are
+
+org.apache.logging.log4j.LogManager
+org.apache.logging.log4j
+org.apache.logging
+org.apache
+org
+org.apache.logging.log4j.Logger
+org.apache.logging.log4j
+org.apache.logging
+org.apache
+org
+
+*-4-* Get the specific packages, that different each other. We will get
+org.apache.logging.log4j.LogManager
+org.apache.logging.log4j.Logger
+
+*-5-* Request to maven search API. Get the top result for each package. Take the groupId and artifactId to download the jar file. Save the latest jar. Make sure not to download the jar with same groupId and artifactId

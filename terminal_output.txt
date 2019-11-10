@@ -1,0 +1,123 @@
+Getting data from Github
+with per page limit: 100
+
+MAIN QUERY
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java&page=1&per_page=100
+Total items from github: 2922
+
+Lower bound: 0
+Upper bound: 2048
+Total count in this range size: 378
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:-1..2049&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A-1..2049&page=2&per_page=100
+Number items in current request, page  2: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A-1..2049&page=3&per_page=100
+Number items in current request, page  3: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A-1..2049&page=4&per_page=100
+Number items in current request, page  4: 5
+
+Lower bound: 2048
+Upper bound: 4096
+Total count in this range size: 541
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:2047..4097&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A2047..4097&page=2&per_page=100
+Number items in current request, page  2: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A2047..4097&page=3&per_page=100
+Number items in current request, page  3: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A2047..4097&page=4&per_page=100
+Number items in current request, page  4: 100
+Abuse Rate Limits
+Retry-After: 60
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A2047..4097&page=5&per_page=100
+Number items in current request, page  5: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A2047..4097&page=6&per_page=100
+Number items in current request, page  6: 41
+
+Lower bound: 4096
+Upper bound: 6144
+Total count in this range size: 634
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:4095..6145&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A4095..6145&page=2&per_page=100
+Number items in current request, page  2: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A4095..6145&page=3&per_page=100
+Number items in current request, page  3: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A4095..6145&page=4&per_page=100
+Number items in current request, page  4: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A4095..6145&page=5&per_page=100
+Number items in current request, page  5: 100
+Abuse Rate Limits
+Retry-After: 60
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A4095..6145&page=6&per_page=100
+Number items in current request, page  6: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A4095..6145&page=7&per_page=100
+Number items in current request, page  7: 34
+
+Lower bound: 6144
+Upper bound: 8192
+Total count in this range size: 300
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:6143..8193&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A6143..8193&page=2&per_page=100
+Number items in current request, page  2: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A6143..8193&page=3&per_page=100
+Number items in current request, page  3: 100
+
+Lower bound: 8192
+Upper bound: 10240
+Total count in this range size: 210
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:8191..10241&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A8191..10241&page=2&per_page=100
+Number items in current request, page  2: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A8191..10241&page=3&per_page=100
+Number items in current request, page  3: 10
+
+Lower bound: 10240
+Upper bound: 14336
+Total count in this range size: 307
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:10239..14337&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A10239..14337&page=2&per_page=100
+Number items in current request, page  2: 100
+Abuse Rate Limits
+Retry-After: 60
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A10239..14337&page=3&per_page=100
+Number items in current request, page  3: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A10239..14337&page=4&per_page=100
+Number items in current request, page  4: 7
+
+Lower bound: 14336
+Upper bound: 30720
+Total count in this range size: 254
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:14335..30721&page=1&per_page=100
+Number items in current request, page  1: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A14335..30721&page=2&per_page=100
+Number items in current request, page  2: 100
+Abuse Rate Limits
+Retry-After: 60
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A14335..30721&page=3&per_page=100
+Number items in current request, page  3: 54
+
+Lower bound: 30720
+Upper bound: 292864
+Total count in this range size: 298
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:30719..292865&page=1&per_page=100
+Number items in current request, page  1: 100
+Abuse Rate Limits
+Retry-After: 60
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A30719..292865&page=2&per_page=100
+Number items in current request, page  2: 100
+Request: GET https://api.github.com/search/code?q=createConfigFile+in%3Afile+language%3Ajava+extension%3Ajava+size%3A30719..292865&page=3&per_page=100
+Number items in current request, page  3: 98
+
+Lower bound: 292864
+Upper bound: 555008
+Total count in this range size: 0
+Request: GET https://api.github.com/search/code?q=createConfigFile+in:file+language:java+extension:java+size:292863..555009&page=1&per_page=100
+Number items in current request, page  1: 0
+
+Total items for all requests: 2849
+Elapsed time: 6 minutes 49 seconds
