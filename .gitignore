@@ -25,3 +25,5 @@ bin/
 .settings
 .classpath
 .project
+
+src/main/java/com/project/githubsearch/jars/
