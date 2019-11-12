@@ -27,4 +27,5 @@ bin/
 .project
 
 src/main/java/com/project/githubsearch/jars/
+src/main/java/com/project/githubsearch/files/
 notes.txt
