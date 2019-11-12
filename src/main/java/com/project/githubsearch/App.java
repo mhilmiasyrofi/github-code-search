@@ -5,8 +5,10 @@ import java.io.FileNotFoundException;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Writer;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.Channels;
@@ -66,7 +68,6 @@ public class App {
     // links from the response header
     private static String META_REL = "rel"; //$NON-NLS-1$
     private static String META_NEXT = "next"; //$NON-NLS-1$
-    private static String META_LAST = "last"; //$NON-NLS-1$
     private static final String DELIM_LINKS = ","; //$NON-NLS-1$
     private static final String DELIM_LINK_PARAM = ";"; //$NON-NLS-1$
 
@@ -86,8 +87,8 @@ public class App {
         String query = "createConfigFile";
         // String query = "stringUrl";
         // String query = "lihatData";
-        
-        long MAX_DATA = 2000;
+        // String query = "addAction int, java.lang.CharSequence, android.app.PendingIntent ";
+        long MAX_DATA = 300;
         // double MAX_DATA = INFINITY;
 
         searchCode(query, MAX_DATA);
@@ -239,13 +240,12 @@ public class App {
 
         System.out.println("\nTotal items for all requests: " + synchronizedData.getData().length());
 
-        // Get the file reference
-        Path path = Paths.get(pathFile);
-
-        BufferedWriter writer;
         try {
-            writer = Files.newBufferedWriter(path);
-            writer.write(synchronizedData.getData().toString());
+            Writer output = null;
+            File file = new File(pathFile);
+            output = new BufferedWriter(new FileWriter(file));
+            output.write(synchronizedData.getData().toString());
+            output.close();
         } catch (IOException e) {
             System.out.println("\nEXCEPTION");   
             System.out.println("Can't save the data to external file!");   
@@ -282,6 +282,8 @@ public class App {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
 
+            System.out.println("Content\n" + content);
+        
             // parse json array
             JSONArray items = new JSONArray(content);
             System.out.println("items.length()");
@@ -318,10 +320,14 @@ public class App {
                     System.out.println("File not found!");
                 } catch (MalformedURLException e) {
                     // TODO Auto-generated catch block
+                    System.out.println("Malformed URL Exception");
                     e.printStackTrace();
                 }
             }
+
+            lines.close();
         } catch (IOException e) {
+            System.out.println("IO Exception");
             e.printStackTrace();
         }
     }
