@@ -95,9 +95,9 @@ public class App {
 
     public static void main(String[] args) throws InterruptedException, IOException, ParseException {
         
-        String query = "java.lang.String#replaceAll";
+        // String query = "java.lang.String#replaceAll";
         // String query = "craeteFile";
-        // String query = "createConfigFile";
+        String query = "createConfigFile";
         // String query = "stringUrl";
         // String query = "lihatData";
         
@@ -106,13 +106,13 @@ public class App {
 
         searchCode(query, MAX_DATA);
 
-        File src = new File("src/main/java/com/project/githubsearch/files/");
-        List<File> files = findJavaFiles(src);
-        for (File file : files) {
-            System.out.println();
-            System.out.println(file);
-            processJavaFile(file);
-        }        
+        // File src = new File("src/main/java/com/project/githubsearch/files/");
+        // List<File> files = findJavaFiles(src);
+        // for (File file : files) {
+        //     System.out.println();
+        //     System.out.println(file);
+        //     processJavaFile(file);
+        // }        
     }
 
     private static void searchCode(String query, long MAX_DATA) {
@@ -191,6 +191,7 @@ public class App {
                 total_count = response.getTotalCount();
 
                 if (total_count < TOTAL_COUNT_LIMIT) { // create the dynamic range higher
+                    System.out.println("Create the dynamic interval higher");
                     while (total_count < 200 && upper_bound < MAX_SIZE) {
                         dynamic_interval = dynamic_interval * 2;
                         upper_bound = lower_bound + dynamic_interval;
@@ -202,15 +203,17 @@ public class App {
                             dynamic_interval = (int) dynamic_interval / 2;
                             upper_bound = lower_bound + dynamic_interval;
                         }
+                        System.out.println("Dynamic interval: " + dynamic_interval);
                     }
                 } else { // create the dynamic interval smaller
+                    System.out.println("Create the dynamic interval smaller");
                     do {
                         dynamic_interval = (int) dynamic_interval / 2;
                         upper_bound = lower_bound + dynamic_interval;
                         response = handleCustomGithubRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
                         total_count = response.getTotalCount();
-
-                    } while (total_count > TOTAL_COUNT_LIMIT);
+                        System.out.println("Dynamic interval: " + dynamic_interval);
+                    } while (total_count > TOTAL_COUNT_LIMIT && dynamic_interval > 1);
                 }
 
                 System.out.println("");
@@ -278,7 +281,7 @@ public class App {
 
         @Override
         public void run() {
-            Response response = handleRequestWithUrl(url);
+            Response response = handleGithubRequestWithUrl(url);
             JSONArray item = response.getItem();
             System.out.println("Request: " + response.getUrlRequest());
             System.out.println("Number items: " + item.length());
@@ -362,7 +365,7 @@ public class App {
         return download_url;
     }
 
-    private static Response handleRequestWithUrl(String url) {
+    private static Response handleGithubRequestWithUrl(String url) {
 
         boolean response_ok = false;
         Response response = new Response();
@@ -434,7 +437,7 @@ public class App {
                 + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
 
         Response response = new Response();
-        response = handleRequestWithUrl(url);
+        response = handleGithubRequestWithUrl(url);
 
         return response;
     }
