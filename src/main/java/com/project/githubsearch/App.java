@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Writer;
 import java.net.MalformedURLException;
+import java.net.ResponseCache;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
@@ -74,21 +75,22 @@ public class App {
     private static final int BAD_CREDENTIAL = 401;
     private static final int RESPONSE_OK = 200;
     private static final int ABUSE_RATE_LIMITS = 403;
+    private static final int UNPROCESSABLE_ENTITY = 422;
 
     private static final int NUMBER_THREADS = 4;
     private static final double INFINITY = -1;
 
     private static SynchronizedData synchronizedData = new SynchronizedData();
 
-    public static void main(String[] args) throws InterruptedException, IOException, ParseException {
+    public static void main(String[] args) {
         
         // String query = "java.lang.String#replaceAll";
         // String query = "craeteFile";
-        String query = "createConfigFile";
+        // String query = "createConfigFile";
         // String query = "stringUrl";
         // String query = "lihatData";
-        // String query = "addAction int, java.lang.CharSequence, android.app.PendingIntent ";
-        long MAX_DATA = 300;
+        String query = "addAction int java.lang.CharSequence android.app.PendingIntent";
+        long MAX_DATA = 100;
         // double MAX_DATA = INFINITY;
 
         searchCode(query, MAX_DATA);
@@ -281,8 +283,6 @@ public class App {
         try  {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
-
-            System.out.println("Content\n" + content);
         
             // parse json array
             JSONArray items = new JSONArray(content);
@@ -290,7 +290,6 @@ public class App {
             System.out.println(items.length());
 
             for (int it = 0; it < items.length(); it++) {
-            // for (int it = 11; it < 20; it++) {
                 JSONObject item = new JSONObject(items.get(it).toString());
                 String html_url = item.getString("html_url");
                 
@@ -361,6 +360,7 @@ public class App {
 
         boolean response_ok = false;
         Response response = new Response();
+        int responseCode;
 
         do {
 
@@ -368,14 +368,16 @@ public class App {
 
             if (lastToken == 1) {
                 lastToken = 2;
-                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN);
+                request = HttpRequest.get(url, true).authorization("token " + AUTH_TOKEN);
             } else {
                 lastToken = 1;
-                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN_2);
+                request = HttpRequest.get(url, true).authorization("token " + AUTH_TOKEN_2);
             }
 
+            System.out.println("Request: " + request);
+
             // handle response
-            int responseCode = request.code();
+            responseCode = request.code();
             if (responseCode == RESPONSE_OK) {
                 // System.out.println("Header: " + request.headers());
                 response.setCode(responseCode);
@@ -406,6 +408,10 @@ public class App {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+            } else if (responseCode == UNPROCESSABLE_ENTITY) {
+                System.out.println("Response Code: " + responseCode);
+                System.out.println("Unprocessbale Entity: only the first 1000 search results are available");
+                System.out.println("See the documentation here: https://developer.github.com/v3/search/");
             } else {
                 System.out.println("Response Code: " + responseCode);
                 System.out.println("Response Body: " + request.body());
@@ -413,7 +419,7 @@ public class App {
                 System.exit(-1);
             }
 
-        } while (!response_ok);
+        } while (!response_ok && responseCode != UNPROCESSABLE_ENTITY);
 
         return response;
     }
@@ -466,7 +472,7 @@ public class App {
         return next;
     }
 
-    private static void processJavaFile(File file) throws IOException {
+    private static void processJavaFile(File file) {
 
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
                 new JavaParserTypeSolver(new File("src/main/java")));
@@ -483,44 +489,49 @@ public class App {
             }
         }
 
-        StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
-        CompilationUnit cu = StaticJavaParser.parse(file);
-
-        String query = "setProperty";
-        cu.findAll(MethodCallExpr.class).forEach(mce -> {
-            // if (mce.getName().toString().equals(query)) {
-            if (true) {
-                try {
-                    ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
-                    System.out.println();
-                    System.out.println();
-                    System.out.println("=============================");
-                    System.out.println("Statement: " + mce);
-                    System.out.println("Method: " + resolvedMethodDeclaration.getName());
-                    System.out.println("Type:" + resolvedMethodDeclaration.getPackageName() + "."
-                            + resolvedMethodDeclaration.getClassName());
-                    System.out.println("Number of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
-                    System.out.println("Arguments: " + mce.getArguments());
-                    for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                        System.out.println(
-                                "Arguments " + i + " type: " + resolvedMethodDeclaration.getParam(i).describeType());
+        try {
+            StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
+            CompilationUnit cu;
+            cu = StaticJavaParser.parse(file);
+            String query = "setProperty";
+            cu.findAll(MethodCallExpr.class).forEach(mce -> {
+                // if (mce.getName().toString().equals(query)) {
+                if (true) {
+                    try {
+                        ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
+                        System.out.println();
+                        System.out.println();
+                        System.out.println("=============================");
+                        System.out.println("Statement: " + mce);
+                        System.out.println("Method: " + resolvedMethodDeclaration.getName());
+                        System.out.println("Type:" + resolvedMethodDeclaration.getPackageName() + "."
+                                + resolvedMethodDeclaration.getClassName());
+                        System.out.println("Number of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
+                        System.out.println("Arguments: " + mce.getArguments());
+                        for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
+                            System.out.println("Arguments " + i + " type: "
+                                    + resolvedMethodDeclaration.getParam(i).describeType());
+                        }
+                        System.out.println("Location:" + mce.getBegin().get());
+                        System.out.println("File:" + file.getAbsolutePath());
+                        System.out.println();
+                    } catch (Exception e) {
+                        System.out.println();
+                        System.out.println();
+                        System.out.println("++++++++++++++++++++++++++++++");
+                        System.out.println("File:" + file.getAbsolutePath());
+                        System.out.println("Error: " + mce);
+                        e.printStackTrace();
                     }
-                    System.out.println("Location:" + mce.getBegin().get());
-                    System.out.println("File:" + file.getAbsolutePath());
-                    System.out.println();
-                } catch (Exception e) {
-                    System.out.println();
-                    System.out.println();
-                    System.out.println("++++++++++++++++++++++++++++++");
-                    System.out.println("File:" + file.getAbsolutePath());
-                    System.out.println("Error: " + mce);
-                    e.printStackTrace();
                 }
-            }
-        });
+            });
+        } catch (FileNotFoundException fileNotFoundException) {
+            // TODO Auto-generated catch block
+            fileNotFoundException.printStackTrace();
+        }
     }
 
-    private static List<File> findJavaFiles(File src) throws ParseException {
+    private static List<File> findJavaFiles(File src) {
         List<File> files = new LinkedList<File>();
         new DirExplorer((level, path, file) -> path.endsWith(".txt"), (level, path, file) -> {
             files.add(file);
