@@ -83,7 +83,8 @@ public class App {
     private static final int UNPROCESSABLE_ENTITY = 422;
 
     private static final int NUMBER_THREADS = 4;
-    private static final double INFINITY = -1;
+    private static final long INFINITY = -1;
+    private static long MAX_DATA = INFINITY;
 
     private static final String FILES_LOCATION = "src/main/java/com/project/githubsearch/files/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
@@ -101,10 +102,9 @@ public class App {
         scanner.close();
         System.out.println("Query: " + query.toString());
 
-        long MAX_DATA = 100;
-        // double MAX_DATA = INFINITY;
+        MAX_DATA = 100;
 
-        searchCode(query, MAX_DATA);
+        searchCode(query);
 
         List<File> files = findJavaFiles(new File(FILES_LOCATION + query.getMethod().toString() + "/"));
         for (File file : files) {
@@ -137,14 +137,14 @@ public class App {
         return query;
     }
 
-    private static void searchCode(Query query, long MAX_DATA) {
+    private static void searchCode(Query query) {
         // path to save the github code response
         String pathFile = "src/main/java/com/project/githubsearch/data/response.json";
-        getData(query, pathFile, MAX_DATA);
+        getData(query, pathFile);
         downloadData(pathFile, query);
     }
 
-    private static void getData(Query query, String pathFile, long MAX_DATA) {
+    private static void getData(Query query, String pathFile) {
         String stringQuery = query.getMethod();
         for (int i = 0; i < query.getArguments().size(); i++) {
             stringQuery += " " + query.getArguments().get(i);
@@ -167,9 +167,9 @@ public class App {
 
         Response firstResponse = handleCustomGithubRequest(endpoint, stringQuery, 0, MAX_SIZE, page, per_page_limit);
         System.out.println();
-        System.out.println("MAIN QUERY");
         System.out.println("Request: " + firstResponse.getUrlRequest());
         System.out.println("Total items from github: " + firstResponse.getTotalCount());
+
         if (MAX_DATA != INFINITY) {
             System.out.println("Not downloading all data. Just " + MAX_DATA);
         }
@@ -320,15 +320,19 @@ public class App {
 
             // parse json array
             JSONArray items = new JSONArray(content);
-            System.out.println("items.length()");
-            System.out.println(items.length());
+            // System.out.println("items.length()");
+            // System.out.println(items.length());
 
-            for (int it = 0; it < items.length(); it++) {
+            long n = items.length();
+            if (MAX_DATA != INFINITY) n = MAX_DATA;
+
+
+            for (int it = 0; it < n; it++) {
                 JSONObject item = new JSONObject(items.get(it).toString());
                 String html_url = item.getString("html_url");
 
                 // convert html url to downloadable url
-                // based on own analysis
+                // based on my own analysis
                 String download_url = convertHTMLUrlToDownloadUrl(html_url);
 
                 String[] parts = html_url.split("/");
@@ -411,7 +415,7 @@ public class App {
                 request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN_2);
             }
 
-            System.out.println("Request: " + request);
+            // System.out.println("Request: " + request);
 
             // handle response
             responseCode = request.code();
