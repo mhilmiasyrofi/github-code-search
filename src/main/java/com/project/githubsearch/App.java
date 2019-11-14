@@ -8,10 +8,12 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.MalformedURLException;
 import java.net.ResponseCache;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
@@ -30,6 +32,7 @@ import java.util.stream.Stream;
 
 import com.github.kevinsawicki.http.HttpRequest;
 import com.project.githubsearch.model.MavenPackage;
+import com.project.githubsearch.model.Query;
 import com.project.githubsearch.model.Response;
 import com.project.githubsearch.model.SynchronizedData;
 import com.project.githubsearch.utils.DirExplorer;
@@ -39,6 +42,7 @@ import org.json.JSONObject;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ParseException;
+import com.github.javaparser.ParseProblemException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -80,31 +84,54 @@ public class App {
     private static final int NUMBER_THREADS = 4;
     private static final double INFINITY = -1;
 
+    private static final String FILES_LOCATION = "src/main/java/com/project/githubsearch/files/";
+    private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
+
     private static SynchronizedData synchronizedData = new SynchronizedData();
 
     public static void main(String[] args) {
-        
-        // String query = "java.lang.String#replaceAll";
-        // String query = "craeteFile";
-        // String query = "createConfigFile";
-        // String query = "stringUrl";
-        // String query = "lihatData";
-        String query = "addAction int java.lang.CharSequence android.app.PendingIntent";
+        String stringQuery = "addAction(int, java.lang.CharSequence, android.app.PendingIntent)";
+        Query query = parseQuery(stringQuery);
+        System.out.println("Query: " + query.toString());
+
         long MAX_DATA = 100;
         // double MAX_DATA = INFINITY;
 
-        searchCode(query, MAX_DATA);
+        // searchCode(query, MAX_DATA);
 
-        // File src = new File("src/main/java/com/project/githubsearch/files/");
-        // List<File> files = findJavaFiles(src);
-        // for (File file : files) {
-        //     System.out.println();
-        //     System.out.println(file);
-        //     processJavaFile(file);
-        // }        
+        List<File> files = findJavaFiles(new File(FILES_LOCATION));
+        for (File file : files) {
+            processJavaFile(file, query);
+        }
     }
 
-    private static void searchCode(String query, long MAX_DATA) {
+    private static Query parseQuery(String s) {
+        Query query = new Query();
+
+        s = s.replace(" ", "");
+
+        int leftBracketLocation = s.indexOf('(');
+        int rightBracketLocation = s.indexOf(')');
+        if (leftBracketLocation == -1 || rightBracketLocation == -1) {
+            System.out.println("Your query isn't accepted");
+            System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
+            System.out.println("Example: " + "addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
+            System.exit(-1);
+        } else {
+            String method = s.substring(0, leftBracketLocation);
+            String args = s.substring(leftBracketLocation + 1, rightBracketLocation);
+            String[] arr = args.split(",");
+            ArrayList<String> arguments = new ArrayList<String>();
+            for (int i = 0; i < arr.length; i++) {
+                arguments.add(arr[i]);
+            }
+            query.setMethod(method);
+            query.setArguments(arguments);
+        }
+        return query;
+    }
+
+    private static void searchCode(Query query, long MAX_DATA) {
         Instant start = Instant.now();
 
         // path to save the github code response
@@ -120,12 +147,15 @@ public class App {
                 .println("Elapsed time for Getting Data from Github: " + minutes + " minutes " + seconds + " seconds");
     }
 
-
-    private static void getData(String query, String pathFile, long MAX_DATA) {
+    private static void getData(Query query, String pathFile, long MAX_DATA) {
+        String stringQuery = query.getMethod();
+        for (int i = 0; i < query.getArguments().size(); i++) {
+            stringQuery += " " + query.getArguments().get(i);
+        }
 
         String endpoint = "https://api.github.com/search/code";
-        
-        int MAX_SIZE = 384000; // the max searchable size from github api
+
+        final int MAX_SIZE = 384000; // the max searchable size from github api
         final int TOTAL_COUNT_LIMIT = 1000;
         int INITIAL_INTERVAL = 2048;
         int lower_bound = 0;
@@ -138,7 +168,7 @@ public class App {
         System.out.println("Getting data from Github");
         System.out.println("with per page limit: " + per_page_limit);
 
-        Response firstResponse = handleCustomGithubRequest(endpoint, query, 0, MAX_SIZE, page, per_page_limit);
+        Response firstResponse = handleCustomGithubRequest(endpoint, stringQuery, 0, MAX_SIZE, page, per_page_limit);
         System.out.println();
         System.out.println("MAIN QUERY");
         System.out.println("Request: " + firstResponse.getUrlRequest());
@@ -148,27 +178,27 @@ public class App {
         }
         System.out.println();
 
-        
         if (firstResponse.getTotalCount() < 1000) {
-            
+
             Response response = firstResponse;
             JSONArray item = response.getItem();
             System.out.println("Request: " + response.getUrlRequest());
             System.out.println("Number items: " + item.length());
             synchronizedData.addArray(item);
-            
+
             int lastPage = (int) Math.ceil(firstResponse.getTotalCount() / 100.0);
-            
+
             ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
             for (int j = 2; j <= lastPage; j++) {
                 page = j;
-                Runnable worker = new URLRunnable(endpoint, query, 0, MAX_SIZE, page, per_page_limit);
+                Runnable worker = new URLRunnable(endpoint, stringQuery, 0, MAX_SIZE, page, per_page_limit);
                 executor.execute(worker);
             }
 
             executor.shutdown();
             // Wait until all threads are finish
-            while (!executor.isTerminated()) {}
+            while (!executor.isTerminated()) {
+            }
 
         } else {
             dynamic_interval = INITIAL_INTERVAL;
@@ -176,7 +206,7 @@ public class App {
             while (lower_bound < MAX_SIZE) {
                 page = 1;
                 upper_bound = lower_bound + dynamic_interval;
-                response = handleCustomGithubRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page, per_page_limit);
                 total_count = response.getTotalCount();
 
                 if (total_count < TOTAL_COUNT_LIMIT) { // create the dynamic range higher
@@ -185,7 +215,8 @@ public class App {
                         dynamic_interval = dynamic_interval * 2;
                         upper_bound = lower_bound + dynamic_interval;
                         int prev_total_count = total_count;
-                        response = handleCustomGithubRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                        response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page,
+                                per_page_limit);
                         total_count = response.getTotalCount();
                         if (total_count > TOTAL_COUNT_LIMIT) {
                             total_count = prev_total_count;
@@ -199,7 +230,8 @@ public class App {
                     do {
                         dynamic_interval = (int) dynamic_interval / 2;
                         upper_bound = lower_bound + dynamic_interval;
-                        response = handleCustomGithubRequest(endpoint, query, lower_bound, upper_bound, page, per_page_limit);
+                        response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page,
+                                per_page_limit);
                         total_count = response.getTotalCount();
                         System.out.println("Dynamic interval: " + dynamic_interval);
                     } while (total_count > TOTAL_COUNT_LIMIT && dynamic_interval > 1);
@@ -221,14 +253,14 @@ public class App {
 
                 for (int j = 2; j <= lastPage; j++) {
                     page = j;
-                    Runnable worker = new URLRunnable(endpoint, query, lower_bound, upper_bound, page,
-                            per_page_limit);
+                    Runnable worker = new URLRunnable(endpoint, stringQuery, lower_bound, upper_bound, page, per_page_limit);
                     executor.execute(worker);
                 }
 
                 executor.shutdown();
                 // Wait until all threads are finish
-                while (!executor.isTerminated()) {}
+                while (!executor.isTerminated()) {
+                }
 
                 lower_bound = upper_bound;
 
@@ -249,12 +281,11 @@ public class App {
             output.write(synchronizedData.getData().toString());
             output.close();
         } catch (IOException e) {
-            System.out.println("\nEXCEPTION");   
-            System.out.println("Can't save the data to external file!");   
+            System.out.println("\nEXCEPTION");
+            System.out.println("Can't save the data to external file!");
             System.exit(-1);
         }
     }
-
 
     public static class URLRunnable implements Runnable {
         private final String url;
@@ -278,12 +309,10 @@ public class App {
     }
 
     private static void downloadData(String pathToData) {
-        String folderPath = "src/main/java/com/project/githubsearch/files/";
-
-        try  {
+        try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
-        
+
             // parse json array
             JSONArray items = new JSONArray(content);
             System.out.println("items.length()");
@@ -292,16 +321,16 @@ public class App {
             for (int it = 0; it < items.length(); it++) {
                 JSONObject item = new JSONObject(items.get(it).toString());
                 String html_url = item.getString("html_url");
-                
+
                 // convert html url to downloadable url
                 // based on own analysis
                 String download_url = convertHTMLUrlToDownloadUrl(html_url);
-                
+
                 String[] parts = html_url.split("/");
                 // using it to make a unique name
                 // replace java to txt for excluding from maven builder
-                String fileName = it + "_" + parts[parts.length - 1].replace(".java", ".txt"); 
-                
+                String fileName = it + "_" + parts[parts.length - 1].replace(".java", ".txt");
+
                 System.out.println();
                 System.out.println("Downloading the file: " + (it + 1));
                 System.out.println("HTML Url: " + html_url);
@@ -311,7 +340,7 @@ public class App {
                     URL url;
                     url = new URL(download_url);
                     ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-                    String pathFile = new String(folderPath + fileName);
+                    String pathFile = new String(FILES_LOCATION + fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
                     fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
                 } catch (FileNotFoundException e) {
@@ -366,12 +395,15 @@ public class App {
 
             HttpRequest request;
 
+            // encode the space into %20
+            url = url.replace(" ", "%20");
+
             if (lastToken == 1) {
                 lastToken = 2;
-                request = HttpRequest.get(url, true).authorization("token " + AUTH_TOKEN);
+                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN);
             } else {
                 lastToken = 1;
-                request = HttpRequest.get(url, true).authorization("token " + AUTH_TOKEN_2);
+                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN_2);
             }
 
             System.out.println("Request: " + request);
@@ -431,10 +463,12 @@ public class App {
         lower_bound--;
         String size = lower_bound + ".." + upper_bound; // lower_bound < size < upper_bound
 
-        String url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size
-                + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
-
+        String url;
         Response response = new Response();
+
+        url = endpoint + "?" + PARAM_QUERY + "=" + query
+                + "+in:file+language:java+extension:java+size:" + size + "&" + PARAM_PAGE + "=" + page + "&"
+                + PARAM_PER_PAGE + "=" + per_page_limit;
         response = handleGithubRequestWithUrl(url);
 
         return response;
@@ -472,36 +506,58 @@ public class App {
         return next;
     }
 
-    private static void processJavaFile(File file) {
+    private static void printSign(String s, int x) {
+        for (int i = 0; i < x; i++) {
+            System.out.print(s);
+        }
+        System.out.println();
+    }
+
+    private static void processJavaFile(File file, Query query) {
+
+        System.out.println();
+        System.out.println();
+        printSign("=", file.toString().length() + 6);
+        System.out.println("File: " + file);
+        printSign("=", file.toString().length() + 6);
 
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
                 new JavaParserTypeSolver(new File("src/main/java")));
         List<String> addedJars = getNeededJars(file);
         for (int i = 0; i < addedJars.size(); i++) {
-            System.out.println(addedJars.get(i));
             try {
                 TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
                 combinedTypeSolver.add(jarTypeSolver);
             } catch (Exception e) {
                 // TODO: handle exception
                 System.out.println("Package corrupt!");
-                System.out.println("-- " + addedJars.get(i));
+                System.out.println("Corrupted Jars: " + addedJars.get(i));
             }
         }
 
+        // System.out.println();
+        // System.out.println("=== Resolving ===");
         try {
             StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
             CompilationUnit cu;
             cu = StaticJavaParser.parse(file);
-            String query = "setProperty";
             cu.findAll(MethodCallExpr.class).forEach(mce -> {
-                // if (mce.getName().toString().equals(query)) {
-                if (true) {
+                if (mce.getName().toString().equals(query.getMethod()) && mce.getArguments().size() == query.getArguments().size()) {
                     try {
                         ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
+                        boolean isArgumentTypeMatch = true;
+                        for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
+                            if (!query.getArguments().get(i).equals(resolvedMethodDeclaration.getParam(i).describeType())){
+                                isArgumentTypeMatch = false;
+                                break;
+                            }
+                        }
                         System.out.println();
-                        System.out.println();
-                        System.out.println("=============================");
+                        if (isArgumentTypeMatch) {
+                            System.out.println("+++ Resolving Success - Match Arguments +++");
+                        } else {
+                            System.out.println("+++ Resolving Success - Arguments don't match +++");
+                        }
                         System.out.println("Statement: " + mce);
                         System.out.println("Method: " + resolvedMethodDeclaration.getName());
                         System.out.println("Type:" + resolvedMethodDeclaration.getPackageName() + "."
@@ -509,25 +565,22 @@ public class App {
                         System.out.println("Number of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
                         System.out.println("Arguments: " + mce.getArguments());
                         for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                            System.out.println("Arguments " + i + " type: "
+                            System.out.println("Argument " + i + " type: "
                                     + resolvedMethodDeclaration.getParam(i).describeType());
                         }
                         System.out.println("Location:" + mce.getBegin().get());
-                        System.out.println("File:" + file.getAbsolutePath());
-                        System.out.println();
                     } catch (Exception e) {
                         System.out.println();
-                        System.out.println();
-                        System.out.println("++++++++++++++++++++++++++++++");
-                        System.out.println("File:" + file.getAbsolutePath());
-                        System.out.println("Error: " + mce);
-                        e.printStackTrace();
+                        System.out.println("--- Resolving Fail ---");
+                        System.out.println("Error metod: " + mce);
+                        // e.printStackTrace();
                     }
                 }
             });
         } catch (FileNotFoundException fileNotFoundException) {
-            // TODO Auto-generated catch block
             fileNotFoundException.printStackTrace();
+        } catch (ParseProblemException parseProblemException) {
+            System.out.println("Parse Problem Exception");
         }
     }
 
@@ -551,31 +604,37 @@ public class App {
         try {
             CompilationUnit cu = StaticJavaParser.parse(file);
             cu.findAll(Name.class).forEach(mce -> {
-                if (importedPackages.isEmpty()) {
-                    importedPackages.add(mce.toString());
-                } else {
-                    boolean isAlreadyDefined = false;
-                    for (int i = 0; i < importedPackages.size(); i++) {
-                        if (importedPackages.get(i).contains(mce.toString())) {
-                            isAlreadyDefined = true;
-                            break;
-                        }
-                    }
-                    if (!isAlreadyDefined) {
+                String[] names = mce.toString().split("[.]");
+                if (names.length >= 2) { //filter some wrong detected import like Override, SupressWarning
+                    if (importedPackages.isEmpty()) {
                         importedPackages.add(mce.toString());
+                    } else {
+                        boolean isAlreadyDefined = false;
+                        for (int i = 0; i < importedPackages.size(); i++) {
+                            if (importedPackages.get(i).contains(mce.toString())) {
+                                isAlreadyDefined = true;
+                                break;
+                            }
+                        }
+                        if (!isAlreadyDefined) {
+                            importedPackages.add(mce.toString());
+                        }
                     }
                 }
             });
         } catch (FileNotFoundException e) {
             System.out.println("EXCEPTION");
             System.out.println("File not found!");
+        } catch (ParseProblemException parseException) {
+            return jarsPath;
         }
 
-        System.out.println("=== Imported Packages ==");
-        for (int i = 0; i < importedPackages.size(); i++) {
-            System.out.println(importedPackages.get(i));
-        }
-
+        // System.out.println();
+        // System.out.println("=== Imported Packages ==");
+        // for (int i = 0; i < importedPackages.size(); i++) {
+        //     System.out.println(importedPackages.get(i));
+        // }
+        
         // filter importedPackages
         // remove the project package and java predefined package
         List<String> neededPackages = new ArrayList<String>();
@@ -588,16 +647,17 @@ public class App {
                 names = qualifiedName.split("[.]");
                 String basePackage = names[0];
                 if (!basePackage.equals(projectPackage) && !basePackage.equals("java")
-                        && !basePackage.equals("javax")) {
+                && !basePackage.equals("javax") && !basePackage.equals("Override")) {
                     neededPackages.add(importedPackages.get(i));
                 }
             }
         }
-
-        System.out.println("=== Needed Packages ==");
-        for (int i = 0; i < neededPackages.size(); i++) {
-            System.out.println(neededPackages.get(i));
-        }
+        
+        // System.out.println();
+        // System.out.println("=== Needed Packages ==");
+        // for (int i = 0; i < neededPackages.size(); i++) {
+        //     System.out.println(neededPackages.get(i));
+        // }
 
         List<MavenPackage> mavenPackages = new ArrayList<MavenPackage>();
 
@@ -606,32 +666,41 @@ public class App {
             String qualifiedName = neededPackages.get(i);
             MavenPackage mavenPackage = getMavenPackageArtifact(qualifiedName);
 
-            // filter if the package is used before
-            boolean isAlreadyUsed = false;
-            for (int j = 0; j < mavenPackages.size(); j++) {
-                MavenPackage usedPackage = mavenPackages.get(j);
-                if (mavenPackage.getGroupId().equals(usedPackage.getGroupId())
-                        && mavenPackage.getArtifactId().equals(usedPackage.getArtifactId())) {
-                    isAlreadyUsed = true;
+            if (!mavenPackage.getId().equals("")) { // handle if the maven package is not exist
+                // filter if the package is used before
+                boolean isAlreadyUsed = false;
+                for (int j = 0; j < mavenPackages.size(); j++) {
+                    MavenPackage usedPackage = mavenPackages.get(j);
+                    if (mavenPackage.getGroupId().equals(usedPackage.getGroupId())
+                            && mavenPackage.getArtifactId().equals(usedPackage.getArtifactId())) {
+                        isAlreadyUsed = true;
+                    }
+                }
+                if (!isAlreadyUsed) {
+                    mavenPackages.add(mavenPackage);
                 }
             }
-            if (!isAlreadyUsed) {
-                mavenPackages.add(mavenPackage);
-            }
         }
 
-        System.out.println("=== Maven Packages ==");
-        for (int i = 0; i < mavenPackages.size(); i++) {
-            System.out.println("GroupID: " + mavenPackages.get(i).getGroupId() + " - ArtifactID: "
-                    + mavenPackages.get(i).getArtifactId());
-        }
+        // System.out.println();
+        // System.out.println("=== Maven Packages ==");
+        // for (int i = 0; i < mavenPackages.size(); i++) {
+        //     System.out.println("GroupID: " + mavenPackages.get(i).getGroupId() + " - ArtifactID: "
+        //             + mavenPackages.get(i).getArtifactId());
+        // }
 
-        System.out.println("=== Downloading Packages ==");
+        // System.out.println();
+        // System.out.println("=== Downloading Packages ==");
+        // File jarFolder = new File(JARS_LOCATION);
+        // if (!jarFolder.exists()) {
+        //     jarFolder.mkdir();
+        // }
+
         for (int i = 0; i < mavenPackages.size(); i++) {
             String pathToJar = downloadMavenJar(mavenPackages.get(i).getGroupId(),
                     mavenPackages.get(i).getArtifactId());
             if (!pathToJar.equals("")) {
-                System.out.println("Downloaded: " + pathToJar);
+                // System.out.println("Downloaded: " + pathToJar);
                 jarsPath.add(pathToJar);
             }
         }
@@ -641,7 +710,7 @@ public class App {
 
     // download the latest package by groupId and artifactId
     private static String downloadMavenJar(String groupId, String artifactId) {
-        String path = "src/main/java/com/project/githubsearch/jars/" + artifactId + "-latest.jar";
+        String path = JARS_LOCATION + artifactId + "-latest.jar";
         String url = "http://repository.sonatype.org/service/local/artifact/maven/redirect?r=central-proxy&g=" + groupId
                 + "&a=" + artifactId + "&v=LATEST";
         // System.out.println("URL: " + url);
