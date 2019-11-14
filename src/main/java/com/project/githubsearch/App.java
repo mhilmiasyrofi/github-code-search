@@ -90,7 +90,8 @@ public class App {
     private static SynchronizedData synchronizedData = new SynchronizedData();
 
     public static void main(String[] args) {
-        String stringQuery = "addAction(int, java.lang.CharSequence, android.app.PendingIntent)";
+        // String stringQuery = "addAction(int, java.lang.CharSequence, android.app.PendingIntent)";
+        String stringQuery = "removeGpsStatusListener(android.location.GpsStatus.Listener)";
         Query query = parseQuery(stringQuery);
         System.out.println("Query: " + query.toString());
 
@@ -560,7 +561,7 @@ public class App {
                         System.out.println("Number of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
                         System.out.println("Arguments: " + mce.getArguments());
                         for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                            System.out.println("Argument " + i + " type: "
+                            System.out.println("Argument " + i+1 + " type: "
                                     + resolvedMethodDeclaration.getParam(i).describeType());
                         }
                         System.out.println("Location:" + mce.getBegin().get());
