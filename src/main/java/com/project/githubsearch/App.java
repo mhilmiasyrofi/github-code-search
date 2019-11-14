@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -90,9 +91,14 @@ public class App {
     private static SynchronizedData synchronizedData = new SynchronizedData();
 
     public static void main(String[] args) {
-        // String stringQuery = "addAction(int, java.lang.CharSequence, android.app.PendingIntent)";
-        String stringQuery = "vibrate(long[],int)";
-        Query query = parseQuery(stringQuery);
+        Query query = new Query();
+        Scanner scanner = new Scanner(System.in);
+        do {
+            System.out.println("Enter the query: ");
+            String stringQuery = scanner.next();
+            query = parseQuery(stringQuery);
+        } while (query.getMethod().equals(""));
+        scanner.close();
         System.out.println("Query: " + query.toString());
 
         long MAX_DATA = 100;
@@ -110,14 +116,13 @@ public class App {
         Query query = new Query();
 
         s = s.replace(" ", "");
-
         int leftBracketLocation = s.indexOf('(');
         int rightBracketLocation = s.indexOf(')');
         if (leftBracketLocation == -1 || rightBracketLocation == -1) {
             System.out.println("Your query isn't accepted");
             System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
             System.out.println("Example: " + "addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
-            System.exit(-1);
+            return query;
         } else {
             String method = s.substring(0, leftBracketLocation);
             String args = s.substring(leftBracketLocation + 1, rightBracketLocation);
