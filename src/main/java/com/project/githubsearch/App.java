@@ -132,19 +132,10 @@ public class App {
     }
 
     private static void searchCode(Query query, long MAX_DATA) {
-        Instant start = Instant.now();
-
         // path to save the github code response
         String pathFile = "src/main/java/com/project/githubsearch/data/response.json";
         getData(query, pathFile, MAX_DATA);
         downloadData(pathFile);
-
-        Instant finish = Instant.now();
-        long timeElapsed = Duration.between(start, finish).toMillis();
-        long minutes = (timeElapsed / 1000) / 60;
-        long seconds = (timeElapsed / 1000) % 60;
-        System.out
-                .println("Elapsed time for Getting Data from Github: " + minutes + " minutes " + seconds + " seconds");
     }
 
     private static void getData(Query query, String pathFile, long MAX_DATA) {
@@ -693,13 +684,13 @@ public class App {
         //             + mavenPackages.get(i).getArtifactId());
         // }
 
+        File jarFolder = new File(JARS_LOCATION);
+        if (!jarFolder.exists()) {
+            jarFolder.mkdir();
+        }
+        
         // System.out.println();
         // System.out.println("=== Downloading Packages ==");
-        // File jarFolder = new File(JARS_LOCATION);
-        // if (!jarFolder.exists()) {
-        //     jarFolder.mkdir();
-        // }
-
         for (int i = 0; i < mavenPackages.size(); i++) {
             String pathToJar = downloadMavenJar(mavenPackages.get(i).getGroupId(),
                     mavenPackages.get(i).getArtifactId());
