@@ -97,7 +97,7 @@ public class App {
         long MAX_DATA = 100;
         // double MAX_DATA = INFINITY;
 
-        // searchCode(query, MAX_DATA);
+        searchCode(query, MAX_DATA);
 
         List<File> files = findJavaFiles(new File(FILES_LOCATION));
         for (File file : files) {
@@ -309,6 +309,10 @@ public class App {
     }
 
     private static void downloadData(String pathToData) {
+        File files = new File(FILES_LOCATION);
+        if (!files.exists()){
+            files.mkdir();
+        }
         try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
