@@ -91,7 +91,7 @@ public class App {
 
     public static void main(String[] args) {
         // String stringQuery = "addAction(int, java.lang.CharSequence, android.app.PendingIntent)";
-        String stringQuery = "removeGpsStatusListener(android.location.GpsStatus.Listener)";
+        String stringQuery = "vibrate(long[],int)";
         Query query = parseQuery(stringQuery);
         System.out.println("Query: " + query.toString());
 
@@ -100,7 +100,7 @@ public class App {
 
         searchCode(query, MAX_DATA);
 
-        List<File> files = findJavaFiles(new File(FILES_LOCATION));
+        List<File> files = findJavaFiles(new File(FILES_LOCATION + query.getMethod().toString() + "/"));
         for (File file : files) {
             processJavaFile(file, query);
         }
@@ -136,7 +136,7 @@ public class App {
         // path to save the github code response
         String pathFile = "src/main/java/com/project/githubsearch/data/response.json";
         getData(query, pathFile, MAX_DATA);
-        downloadData(pathFile);
+        downloadData(pathFile, query);
     }
 
     private static void getData(Query query, String pathFile, long MAX_DATA) {
@@ -300,10 +300,14 @@ public class App {
         }
     }
 
-    private static void downloadData(String pathToData) {
+    private static void downloadData(String pathToData, Query query) {
         File files = new File(FILES_LOCATION);
         if (!files.exists()){
             files.mkdir();
+        }
+        File exactFolder = new File(FILES_LOCATION + query.getMethod().toString() + "/");
+        if (!exactFolder.exists()){
+            exactFolder.mkdir();
         }
         try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
@@ -336,7 +340,7 @@ public class App {
                     URL url;
                     url = new URL(download_url);
                     ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-                    String pathFile = new String(FILES_LOCATION + fileName);
+                    String pathFile = new String(FILES_LOCATION + query.getMethod().toString() +  "/" + fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
                     fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
                 } catch (FileNotFoundException e) {
