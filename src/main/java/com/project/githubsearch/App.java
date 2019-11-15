@@ -8,19 +8,13 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.MalformedURLException;
-import java.net.ResponseCache;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -42,7 +36,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ParseException;
 import com.github.javaparser.ParseProblemException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Name;
@@ -61,22 +54,23 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeS
  */
 public class App {
 
+    // run multiple token
     private static final String AUTH_TOKEN = System.getenv("GITHUB_AUTH_TOKEN");
     private static final String AUTH_TOKEN_2 = System.getenv("GITHUB_AUTH_TOKEN_2");
     private static int lastToken = 1;
+  
     // parameter for the request
-    private static String PARAM_QUERY = "q"; //$NON-NLS-1$
-    private static String PARAM_PAGE = "page"; //$NON-NLS-1$
-    private static String PARAM_PER_PAGE = "per_page"; //$NON-NLS-1$
-
-    private static String ACCEPT_TEXT_MATCH = "application/vnd.github.v3.text-match+json";
-
+    private static final String PARAM_QUERY = "q"; //$NON-NLS-1$
+    private static final String PARAM_PAGE = "page"; //$NON-NLS-1$
+    private static final String PARAM_PER_PAGE = "per_page"; //$NON-NLS-1$
+    
     // links from the response header
-    private static String META_REL = "rel"; //$NON-NLS-1$
-    private static String META_NEXT = "next"; //$NON-NLS-1$
+    private static final String META_REL = "rel"; //$NON-NLS-1$
+    private static final String META_NEXT = "next"; //$NON-NLS-1$
     private static final String DELIM_LINKS = ","; //$NON-NLS-1$
     private static final String DELIM_LINK_PARAM = ";"; //$NON-NLS-1$
 
+    // response code from github
     private static final int BAD_CREDENTIAL = 401;
     private static final int RESPONSE_OK = 200;
     private static final int ABUSE_RATE_LIMITS = 403;
@@ -86,6 +80,7 @@ public class App {
     private static final long INFINITY = -1;
     private static long MAX_DATA = INFINITY;
 
+    // folder location to save the downloaded files and jars
     private static final String FILES_LOCATION = "src/main/java/com/project/githubsearch/files/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
 
