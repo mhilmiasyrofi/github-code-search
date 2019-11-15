@@ -81,6 +81,7 @@ public class App {
     private static long MAX_DATA = INFINITY;
 
     // folder location to save the downloaded files and jars
+    private static final String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
     private static final String FILES_LOCATION = "src/main/java/com/project/githubsearch/files/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
 
@@ -138,7 +139,6 @@ public class App {
         Query query = new Query();
 
         s = s.replace(" ", "");
-        System.out.println(s);
         int leftBracketLocation = s.indexOf('(');
         int rightBracketLocation = s.indexOf(')');
         if (leftBracketLocation == -1 || rightBracketLocation == -1) {
@@ -161,10 +161,15 @@ public class App {
     }
 
     private static void searchCode(Query query) {
+        
+        File dataFolder = new File(DATA_LOCATION);
+        if (!dataFolder.exists()) {
+            dataFolder.mkdir();
+        }
         // path to save the github code response
-        String pathFile = "src/main/java/com/project/githubsearch/data/response.json";
-        getData(query, pathFile);
-        downloadData(pathFile, query);
+        String pathToSaveGithubResponse = DATA_LOCATION + query.getMethod().toString() + ".json";
+        getData(query, pathToSaveGithubResponse);
+        downloadData(query, pathToSaveGithubResponse);
     }
 
     private static void getData(Query query, String pathFile) {
@@ -328,7 +333,7 @@ public class App {
         }
     }
 
-    private static void downloadData(String pathToData, Query query) {
+    private static void downloadData(Query query, String pathToData) {
         File files = new File(FILES_LOCATION);
         if (!files.exists()){
             files.mkdir();
@@ -343,16 +348,14 @@ public class App {
 
             // parse json array
             JSONArray items = new JSONArray(content);
-            // System.out.println("items.length()");
-            // System.out.println(items.length());
-
+            
             long n = items.length();
             if (MAX_DATA != INFINITY) n = MAX_DATA;
-
 
             for (int it = 0; it < n; it++) {
                 JSONObject item = new JSONObject(items.get(it).toString());
                 String html_url = item.getString("html_url");
+                int id = item.getInt("id");
 
                 // convert html url to downloadable url
                 // based on my own analysis
@@ -361,7 +364,7 @@ public class App {
                 String[] parts = html_url.split("/");
                 // using it to make a unique name
                 // replace java to txt for excluding from maven builder
-                String fileName = it + "_" + parts[parts.length - 1].replace(".java", ".txt");
+                String fileName = id + "_" + parts[parts.length - 1].replace(".java", ".txt");
 
                 System.out.println();
                 System.out.println("Downloading the file: " + (it + 1));
@@ -375,11 +378,11 @@ public class App {
                     String pathFile = new String(FILES_LOCATION + query.getMethod().toString() +  "/" + fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
                     fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+                    fileOutputStream.close();
                 } catch (FileNotFoundException e) {
                     System.out.println("Can't download the github file");
                     System.out.println("File not found!");
                 } catch (MalformedURLException e) {
-                    // TODO Auto-generated catch block
                     System.out.println("Malformed URL Exception");
                     e.printStackTrace();
                 }
@@ -597,7 +600,7 @@ public class App {
                         System.out.println("Number of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
                         System.out.println("Arguments: " + mce.getArguments());
                         for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                            System.out.println("Argument " + i+1 + " type: "
+                            System.out.println("Argument " + (i+1) + " type: "
                                     + resolvedMethodDeclaration.getParam(i).describeType());
                         }
                         System.out.println("Location:" + mce.getBegin().get());

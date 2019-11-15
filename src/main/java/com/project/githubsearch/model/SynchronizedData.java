@@ -14,6 +14,7 @@ public class SynchronizedData {
         for (int it = 0; it < arr.length(); it++) {
             JSONObject instance = new JSONObject(arr.get(it).toString());
             JSONObject obj = new JSONObject();
+            obj.put("id", data.length());
             obj.put("html_url", instance.getString("html_url"));
             data.put(obj);
         }
