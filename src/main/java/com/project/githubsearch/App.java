@@ -89,11 +89,15 @@ public class App {
     public static void main(String[] args) {
         Query query = new Query();
         Scanner scanner = new Scanner(System.in);
+        boolean inputFinish = false;
         do {
             System.out.println("Enter the query: ");
             String stringQuery = scanner.nextLine();
             query = parseQuery(stringQuery);
-        } while (query.getMethod().equals(""));
+            if (!query.getMethod().equals("")){
+                inputFinish = true;
+            }
+        } while (!inputFinish);
         scanner.close();
         System.out.println("Query: " + query.toString());
 
@@ -106,6 +110,29 @@ public class App {
             processJavaFile(file, query);
         }
     }
+
+    private static ArrayList<Query> inputQuery(){
+        ArrayList<Query> queries = new ArrayList<Query>();
+        Scanner scanner = new Scanner(System.in);
+        boolean inputFinish = false;
+        do {
+            System.out.println("Enter the query: ");
+            String stringQuery = scanner.nextLine();
+            Query query = parseQuery(stringQuery);
+            if (!query.getMethod().equals("")) {
+                System.out.println("Do you want to search multiple queries? y/n");
+                String isMultipleQuery = scanner.nextLine();
+                if (!isMultipleQuery.equals("y")){
+                    inputFinish = true;
+                }
+            }
+        } while (!inputFinish);
+        scanner.close();
+        System.out.println("Queries: " + queries.toString());
+
+        return queries;
+    }
+
 
     private static Query parseQuery(String s) {
         Query query = new Query();
