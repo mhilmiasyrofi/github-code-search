@@ -9,12 +9,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Writer;
+
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -35,8 +35,6 @@ import com.project.githubsearch.utils.DirExplorer;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-
-import javassist.bytecode.stackmap.BasicBlock.Catch;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ParseProblemException;
