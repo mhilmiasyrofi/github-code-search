@@ -14,6 +14,7 @@ import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -35,11 +36,14 @@ import com.project.githubsearch.utils.DirExplorer;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import javassist.bytecode.stackmap.BasicBlock.Catch;
+
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ParseProblemException;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.model.resolution.TypeSolver;
@@ -101,14 +105,51 @@ public class App {
         scanner.close();
         System.out.println("Query: " + query.toString());
 
-        MAX_DATA = 100;
-
+        MAX_DATA = 10;
+        
+        initFolder(query.getMethod());
         searchCode(query);
 
-        List<File> files = findJavaFiles(new File(DATA_LOCATION + query.getMethod().toString() + "/files/"));
-        for (File file : files) {
-            processJavaFile(file, query);
+        BufferedWriter successWriter, failWriter, packageCorruptWriter;
+        try {
+            successWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + query.getMethod() + "/success.txt"));
+            failWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + query.getMethod() + "/fail.txt"));
+            packageCorruptWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + query.getMethod() + "/corruptedPackage.txt"));
+            
+            List<File> files = findJavaFiles(new File(DATA_LOCATION + query.getMethod().toString() + "/files/"));
+            for (File file : files) {
+                processJavaFile(file, query, successWriter, failWriter, packageCorruptWriter);
+            }
+            successWriter.close();
+            failWriter.close();
+            packageCorruptWriter.close();
+        } catch (IOException ioException) {
+            // ioException.printStackTrace();
+            System.out.println("IO Exception");
         }
+    }
+
+    private static void initFolder(String folderName) {
+        File dataFolder = new File(DATA_LOCATION);
+        if (!dataFolder.exists()) {
+            dataFolder.mkdir();
+        }
+
+        File exactFolder = new File(DATA_LOCATION + folderName + "/");
+        if (!exactFolder.exists()) {
+            exactFolder.mkdir();
+        }
+
+        File files = new File(DATA_LOCATION + folderName + "/files/");
+        if (!files.exists()) {
+            files.mkdir();
+        }
+
+        File jarFolder = new File(JARS_LOCATION);
+        if (!jarFolder.exists()) {
+            jarFolder.mkdir();
+        }
+
     }
 
     private static ArrayList<Query> inputQuery(){
@@ -160,17 +201,6 @@ public class App {
     }
 
     private static void searchCode(Query query) {
-        
-        File dataFolder = new File(DATA_LOCATION);
-        if (!dataFolder.exists()) {
-            dataFolder.mkdir();
-        }
-
-        File exactFolder = new File(DATA_LOCATION + query.getMethod().toString() + "/");
-        if (!exactFolder.exists()) {
-            exactFolder.mkdir();
-        }
-
         // path to save the github code response
         String pathToSaveGithubResponse = DATA_LOCATION + query.getMethod().toString() + "/data.json";
         getData(query, pathToSaveGithubResponse);
@@ -339,10 +369,6 @@ public class App {
     }
 
     private static void downloadData(Query query, String pathToData) {
-        File files = new File(DATA_LOCATION + query.getMethod().toString() + "/files/");
-        if (!files.exists()){
-            files.mkdir();
-        }
         try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
@@ -549,31 +575,33 @@ public class App {
         System.out.println();
     }
 
-    private static void processJavaFile(File file, Query query) {
-
-        System.out.println();
-        System.out.println();
-        printSign("=", file.toString().length() + 6);
-        System.out.println("File: " + file);
-        printSign("=", file.toString().length() + 6);
-
-        CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
-                new JavaParserTypeSolver(new File("src/main/java")));
-        List<String> addedJars = getNeededJars(file);
-        for (int i = 0; i < addedJars.size(); i++) {
-            try {
-                TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
-                combinedTypeSolver.add(jarTypeSolver);
-            } catch (Exception e) {
-                // TODO: handle exception
-                System.out.println("Package corrupt!");
-                System.out.println("Corrupted Jars: " + addedJars.get(i));
+    private static void processJavaFile(File file, Query query, BufferedWriter successWriter,  BufferedWriter failWriter, BufferedWriter packageCorruptWriter) {
+        try { 
+            System.out.println();
+            System.out.println();
+            printSign("=", file.toString().length() + 6);
+            System.out.println("File: " + file);
+            printSign("=", file.toString().length() + 6);
+        
+    
+            CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
+                    new JavaParserTypeSolver(new File("src/main/java")));
+            List<String> addedJars = getNeededJars(file);
+            for (int i = 0; i < addedJars.size(); i++) {
+                try {
+                    TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
+                    combinedTypeSolver.add(jarTypeSolver);
+                } catch (Exception e) {
+                    System.out.println("Package corrupt!");
+                    System.out.println("Corrupted Jars: " + addedJars.get(i));
+                    packageCorruptWriter.write("\n\nFile: " + file);
+                    packageCorruptWriter.write("\nPackage corrupt!");
+                    packageCorruptWriter.write("\nCorrupted Jars: " + addedJars.get(i));
+                }
             }
-        }
-
-        // System.out.println();
-        // System.out.println("=== Resolving ===");
-        try {
+    
+            // System.out.println();
+            // System.out.println("=== Resolving ===");
             StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
             CompilationUnit cu;
             cu = StaticJavaParser.parse(file);
@@ -591,8 +619,32 @@ public class App {
                         System.out.println();
                         if (isArgumentTypeMatch) {
                             System.out.println("+++ Resolving Success - Match Arguments +++");
+                            successWriter.write("\n\nFile: " + file);
+                            successWriter.write("\nStatement: " + mce);
+                            successWriter.write("\nMethod: " + resolvedMethodDeclaration.getName());
+                            successWriter.write("\nType:" + resolvedMethodDeclaration.getPackageName() + "."
+                                    + resolvedMethodDeclaration.getClassName());
+                            successWriter.write("\nNumber of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
+                            successWriter.write("\nArguments: " + mce.getArguments());
+                            for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
+                                successWriter.write("\nArgument " + (i + 1) + " type: "
+                                        + resolvedMethodDeclaration.getParam(i).describeType());
+                            }
+                            successWriter.write("\nLocation:" + mce.getBegin().get());
                         } else {
                             System.out.println("+++ Resolving Success - Arguments don't match +++");
+                            failWriter.write("\n\nFile: " + file);
+                            failWriter.write("\nStatement: " + mce);
+                            failWriter.write("\nMethod: " + resolvedMethodDeclaration.getName());
+                            failWriter.write("\nType:" + resolvedMethodDeclaration.getPackageName() + "."
+                                    + resolvedMethodDeclaration.getClassName());
+                            failWriter.write("\nNumber of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
+                            failWriter.write("\nArguments: " + mce.getArguments());
+                            for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
+                                failWriter.write("\nArgument " + (i + 1) + " type: "
+                                        + resolvedMethodDeclaration.getParam(i).describeType());
+                            }
+                            failWriter.write("\nLocation:" + mce.getBegin().get());
                         }
                         System.out.println("Statement: " + mce);
                         System.out.println("Method: " + resolvedMethodDeclaration.getName());
@@ -605,19 +657,37 @@ public class App {
                                     + resolvedMethodDeclaration.getParam(i).describeType());
                         }
                         System.out.println("Location:" + mce.getBegin().get());
-                    } catch (Exception e) {
+                    } catch (UnsolvedSymbolException unsolvedSymbolException) {
                         System.out.println();
                         System.out.println("--- Resolving Fail ---");
                         System.out.println("Error metod: " + mce);
+                        try {
+                            failWriter.write("\n\nFile: " + file);
+                            failWriter.write("\nError metod: " + mce);
+                        } catch (IOException io) {
+                        }
                         // e.printStackTrace();
+                    } catch (IOException io1) {
+                        System.out.println("IO Exception");
                     }
                 }
             });
-        } catch (FileNotFoundException fileNotFoundException) {
-            fileNotFoundException.printStackTrace();
+
         } catch (ParseProblemException parseProblemException) {
             System.out.println("Parse Problem Exception");
+        } catch (RuntimeException runtimeException){
+            // try {
+            //     successWriter.close();
+            //     failWriter.close();
+            // } catch (IOException e) {
+            //     // TODO Auto-generated catch block
+            //     e.printStackTrace();
+            // }
+            // runtimeException.printStackTrace();
+        } catch (IOException io2) {
+            io2.printStackTrace();
         }
+        
     }
 
     private static List<File> findJavaFiles(File src) {
@@ -724,11 +794,6 @@ public class App {
         //     System.out.println("GroupID: " + mavenPackages.get(i).getGroupId() + " - ArtifactID: "
         //             + mavenPackages.get(i).getArtifactId());
         // }
-
-        File jarFolder = new File(JARS_LOCATION);
-        if (!jarFolder.exists()) {
-            jarFolder.mkdir();
-        }
         
         // System.out.println();
         // System.out.println("=== Downloading Packages ==");
