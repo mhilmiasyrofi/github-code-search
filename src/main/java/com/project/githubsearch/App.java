@@ -91,7 +91,7 @@ public class App {
         Scanner scanner = new Scanner(System.in);
         do {
             System.out.println("Enter the query: ");
-            String stringQuery = scanner.next();
+            String stringQuery = scanner.nextLine();
             query = parseQuery(stringQuery);
         } while (query.getMethod().equals(""));
         scanner.close();
@@ -111,6 +111,7 @@ public class App {
         Query query = new Query();
 
         s = s.replace(" ", "");
+        System.out.println(s);
         int leftBracketLocation = s.indexOf('(');
         int rightBracketLocation = s.indexOf(')');
         if (leftBracketLocation == -1 || rightBracketLocation == -1) {
