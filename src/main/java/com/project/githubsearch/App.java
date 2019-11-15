@@ -82,7 +82,6 @@ public class App {
 
     // folder location to save the downloaded files and jars
     private static final String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
-    private static final String FILES_LOCATION = "src/main/java/com/project/githubsearch/files/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
 
     private static SynchronizedData synchronizedData = new SynchronizedData();
@@ -106,7 +105,7 @@ public class App {
 
         searchCode(query);
 
-        List<File> files = findJavaFiles(new File(FILES_LOCATION + query.getMethod().toString() + "/"));
+        List<File> files = findJavaFiles(new File(DATA_LOCATION + query.getMethod().toString() + "/files/"));
         for (File file : files) {
             processJavaFile(file, query);
         }
@@ -166,8 +165,14 @@ public class App {
         if (!dataFolder.exists()) {
             dataFolder.mkdir();
         }
+
+        File exactFolder = new File(DATA_LOCATION + query.getMethod().toString() + "/");
+        if (!exactFolder.exists()) {
+            exactFolder.mkdir();
+        }
+
         // path to save the github code response
-        String pathToSaveGithubResponse = DATA_LOCATION + query.getMethod().toString() + ".json";
+        String pathToSaveGithubResponse = DATA_LOCATION + query.getMethod().toString() + "/data.json";
         getData(query, pathToSaveGithubResponse);
         downloadData(query, pathToSaveGithubResponse);
     }
@@ -334,13 +339,9 @@ public class App {
     }
 
     private static void downloadData(Query query, String pathToData) {
-        File files = new File(FILES_LOCATION);
+        File files = new File(DATA_LOCATION + query.getMethod().toString() + "/files/");
         if (!files.exists()){
             files.mkdir();
-        }
-        File exactFolder = new File(FILES_LOCATION + query.getMethod().toString() + "/");
-        if (!exactFolder.exists()){
-            exactFolder.mkdir();
         }
         try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
@@ -375,7 +376,7 @@ public class App {
                     URL url;
                     url = new URL(download_url);
                     ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-                    String pathFile = new String(FILES_LOCATION + query.getMethod().toString() +  "/" + fileName);
+                    String pathFile = new String(DATA_LOCATION + query.getMethod().toString() + "/files/" + fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
                     fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
                     fileOutputStream.close();
