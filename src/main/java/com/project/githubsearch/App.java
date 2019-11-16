@@ -83,71 +83,38 @@ public class App {
     private static long MAX_DATA = INFINITY;
 
     // folder location to save the downloaded files and jars
-    private static final String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
+    private static String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/"; 
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
 
     private static SynchronizedData synchronizedData = new SynchronizedData();
 
     public static void main(String[] args) {
-        Query query = new Query();
-        Scanner scanner = new Scanner(System.in);
-        boolean inputFinish = false;
-        do {
-            System.out.println("Enter the query: ");
-            String stringQuery = scanner.nextLine();
-            query = parseQuery(stringQuery);
-            if (!query.getMethod().equals("")){
-                inputFinish = true;
-            }
-        } while (!inputFinish);
-        scanner.close();
-        System.out.println("Query: " + query.toString());
+        ArrayList<Query> queries = inputQuery();
+        printQuery(queries);
 
         MAX_DATA = 10;
         
-        initFolder(query.getMethod());
-        searchCode(query);
+        initUniqueFolderToSaveData(queries);
+        searchCode(queries);
 
-        BufferedWriter successWriter, failWriter, packageCorruptWriter;
+        BufferedWriter successWriter, logWriter, packageCorruptWriter;
         try {
-            successWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + query.getMethod() + "/success.txt"));
-            failWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + query.getMethod() + "/fail.txt"));
-            packageCorruptWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + query.getMethod() + "/corruptedPackage.txt"));
+            successWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "success.txt"));
+            logWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "fail.txt"));
+            packageCorruptWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "corruptedPackage.txt"));
             
-            List<File> files = findJavaFiles(new File(DATA_LOCATION + query.getMethod().toString() + "/files/"));
+            List<File> files = findJavaFiles(new File(DATA_LOCATION + "files/"));
             for (File file : files) {
-                processJavaFile(file, query, successWriter, failWriter, packageCorruptWriter);
+                processJavaFile(file, queries, successWriter, logWriter, packageCorruptWriter);
             }
+
             successWriter.close();
-            failWriter.close();
+            logWriter.close();
             packageCorruptWriter.close();
         } catch (IOException ioException) {
             // ioException.printStackTrace();
             System.out.println("IO Exception");
         }
-    }
-
-    private static void initFolder(String folderName) {
-        File dataFolder = new File(DATA_LOCATION);
-        if (!dataFolder.exists()) {
-            dataFolder.mkdir();
-        }
-
-        File exactFolder = new File(DATA_LOCATION + folderName + "/");
-        if (!exactFolder.exists()) {
-            exactFolder.mkdir();
-        }
-
-        File files = new File(DATA_LOCATION + folderName + "/files/");
-        if (!files.exists()) {
-            files.mkdir();
-        }
-
-        File jarFolder = new File(JARS_LOCATION);
-        if (!jarFolder.exists()) {
-            jarFolder.mkdir();
-        }
-
     }
 
     private static ArrayList<Query> inputQuery(){
@@ -159,7 +126,8 @@ public class App {
             String stringQuery = scanner.nextLine();
             Query query = parseQuery(stringQuery);
             if (!query.getMethod().equals("")) {
-                System.out.println("Do you want to search multiple queries? y/n");
+                queries.add(query);
+                System.out.println("Do you want to add another query? y/n");
                 String isMultipleQuery = scanner.nextLine();
                 if (!isMultipleQuery.equals("y")){
                     inputFinish = true;
@@ -167,11 +135,18 @@ public class App {
             }
         } while (!inputFinish);
         scanner.close();
-        System.out.println("Queries: " + queries.toString());
 
         return queries;
     }
 
+    private static void printQuery(ArrayList<Query> queries) {
+        System.out.println("============");
+        System.out.println("Your Queries");
+        System.out.println("============");
+        for (int i = 0; i < queries.size(); i++) {
+            System.out.println("Query " + (i+1)  + ": " + queries.get(i));
+        }
+    }
 
     private static Query parseQuery(String s) {
         Query query = new Query();
@@ -198,17 +173,58 @@ public class App {
         return query;
     }
 
-    private static void searchCode(Query query) {
-        // path to save the github code response
-        String pathToSaveGithubResponse = DATA_LOCATION + query.getMethod().toString() + "/data.json";
-        getData(query, pathToSaveGithubResponse);
-        downloadData(query, pathToSaveGithubResponse);
+
+    private static void initUniqueFolderToSaveData(ArrayList<Query> queries) {
+
+        String folderName = "";
+        for (int i = 0; i < queries.size(); i++) {
+            folderName += queries.get(i).getMethod();
+            if (i != queries.size() - 1) {
+                folderName += "&";
+            }
+        }
+
+        File dataFolder = new File(DATA_LOCATION);
+        if (!dataFolder.exists()) {
+            dataFolder.mkdir();
+        }
+
+        DATA_LOCATION = DATA_LOCATION + folderName + "/";
+
+        File exactFolder = new File(DATA_LOCATION);
+        if (!exactFolder.exists()) {
+            exactFolder.mkdir();
+        }
+
+        File files = new File(DATA_LOCATION + "files/");
+        if (!files.exists()) {
+            files.mkdir();
+        }
+
+        File jarFolder = new File(JARS_LOCATION);
+        if (!jarFolder.exists()) {
+            jarFolder.mkdir();
+        }
+
     }
 
-    private static void getData(Query query, String pathFile) {
-        String stringQuery = query.getMethod();
-        for (int i = 0; i < query.getArguments().size(); i++) {
-            stringQuery += " " + query.getArguments().get(i);
+    private static void searchCode(ArrayList<Query> queries) {
+        // path to save the github code response
+        String pathToSaveGithubResponse = DATA_LOCATION + "data.json";
+        getData(queries, pathToSaveGithubResponse);
+        downloadData(pathToSaveGithubResponse);
+    }
+
+    private static void getData(ArrayList<Query> queries, String pathFile) {
+            
+        String stringQuery = new String("");
+        for (int i = 0; i < queries.size(); i++) {
+            Query query = queries.get(i);
+            stringQuery += query.getMethod();
+            for (int j = 0; j < query.getArguments().size(); j++) {
+                stringQuery += " " + query.getArguments().get(j);
+            }
+            if (i != queries.size()-1) stringQuery += " ";
         }
 
         String endpoint = "https://api.github.com/search/code";
@@ -223,13 +239,17 @@ public class App {
         int per_page_limit = 100;
         int page = 1;
 
-        System.out.println("Getting data from Github");
-        System.out.println("with per page limit: " + per_page_limit);
+        System.out.println("\n\n========================");
+        System.out.println("Getting Data from Github");
+        System.out.println("========================");
+        System.out.println("\nPer page limit: " + per_page_limit);
 
         Response firstResponse = handleCustomGithubRequest(endpoint, stringQuery, 0, MAX_SIZE, page, per_page_limit);
         System.out.println();
         System.out.println("Request: " + firstResponse.getUrlRequest());
         System.out.println("Total items from github: " + firstResponse.getTotalCount());
+
+        if (firstResponse.getTotalCount() == 0) System.exit(-1);
 
         if (MAX_DATA != INFINITY) {
             System.out.println("Not downloading all data. Just " + MAX_DATA);
@@ -366,7 +386,11 @@ public class App {
         }
     }
 
-    private static void downloadData(Query query, String pathToData) {
+    private static void downloadData(String pathToData) {
+        System.out.println("\n\n=============");
+        System.out.println("Download Data");
+        System.out.println("=============");
+        
         try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
@@ -400,7 +424,7 @@ public class App {
                     URL url;
                     url = new URL(download_url);
                     ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-                    String pathFile = new String(DATA_LOCATION + query.getMethod().toString() + "/files/" + fileName);
+                    String pathFile = new String(DATA_LOCATION + "files/" + fileName);
                     FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
                     fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
                     fileOutputStream.close();
@@ -573,9 +597,8 @@ public class App {
         System.out.println();
     }
 
-    private static void processJavaFile(File file, Query query, BufferedWriter successWriter,  BufferedWriter failWriter, BufferedWriter packageCorruptWriter) {
+    private static void processJavaFile(File file, ArrayList<Query> queries, BufferedWriter successWriter,  BufferedWriter logWriter, BufferedWriter packageCorruptWriter) {
         try { 
-            System.out.println();
             System.out.println();
             printSign("=", file.toString().length() + 6);
             System.out.println("File: " + file);
@@ -595,95 +618,86 @@ public class App {
                     packageCorruptWriter.write("\n\nFile: " + file);
                     packageCorruptWriter.write("\nPackage corrupt!");
                     packageCorruptWriter.write("\nCorrupted Jars: " + addedJars.get(i));
+                    packageCorruptWriter.write("\nPlease download it manually from maven");
                 }
             }
-    
-            // System.out.println();
-            // System.out.println("=== Resolving ===");
             StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
             CompilationUnit cu;
             cu = StaticJavaParser.parse(file);
-            cu.findAll(MethodCallExpr.class).forEach(mce -> {
-                if (mce.getName().toString().equals(query.getMethod()) && mce.getArguments().size() == query.getArguments().size()) {
-                    try {
-                        ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
-                        boolean isArgumentTypeMatch = true;
-                        for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                            if (!query.getArguments().get(i).equals(resolvedMethodDeclaration.getParam(i).describeType())){
-                                isArgumentTypeMatch = false;
-                                break;
-                            }
-                        }
-                        System.out.println();
-                        if (isArgumentTypeMatch) {
-                            System.out.println("+++ Resolving Success - Match Arguments +++");
-                            successWriter.write("\n\nFile: " + file);
-                            successWriter.write("\nStatement: " + mce);
-                            successWriter.write("\nMethod: " + resolvedMethodDeclaration.getName());
-                            successWriter.write("\nType:" + resolvedMethodDeclaration.getPackageName() + "."
-                                    + resolvedMethodDeclaration.getClassName());
-                            successWriter.write("\nNumber of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
-                            successWriter.write("\nArguments: " + mce.getArguments());
-                            for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                                successWriter.write("\nArgument " + (i + 1) + " type: "
-                                        + resolvedMethodDeclaration.getParam(i).describeType());
-                            }
-                            successWriter.write("\nLocation:" + mce.getBegin().get());
-                        } else {
-                            System.out.println("+++ Resolving Success - Arguments don't match +++");
-                            failWriter.write("\n\nFile: " + file);
-                            failWriter.write("\nStatement: " + mce);
-                            failWriter.write("\nMethod: " + resolvedMethodDeclaration.getName());
-                            failWriter.write("\nType:" + resolvedMethodDeclaration.getPackageName() + "."
-                                    + resolvedMethodDeclaration.getClassName());
-                            failWriter.write("\nNumber of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
-                            failWriter.write("\nArguments: " + mce.getArguments());
-                            for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                                failWriter.write("\nArgument " + (i + 1) + " type: "
-                                        + resolvedMethodDeclaration.getParam(i).describeType());
-                            }
-                            failWriter.write("\nLocation:" + mce.getBegin().get());
-                        }
-                        System.out.println("Statement: " + mce);
-                        System.out.println("Method: " + resolvedMethodDeclaration.getName());
-                        System.out.println("Type:" + resolvedMethodDeclaration.getPackageName() + "."
-                                + resolvedMethodDeclaration.getClassName());
-                        System.out.println("Number of Arguments: " + resolvedMethodDeclaration.getNumberOfParams());
-                        System.out.println("Arguments: " + mce.getArguments());
-                        for (int i = 0; i < resolvedMethodDeclaration.getNumberOfParams(); i++) {
-                            System.out.println("Argument " + (i+1) + " type: "
-                                    + resolvedMethodDeclaration.getParam(i).describeType());
-                        }
-                        System.out.println("Location:" + mce.getBegin().get());
-                    } catch (UnsolvedSymbolException unsolvedSymbolException) {
-                        System.out.println();
-                        System.out.println("--- Resolving Fail ---");
-                        System.out.println("Error metod: " + mce);
+
+            ArrayList<Boolean> isMethodMatch = new ArrayList<Boolean>(); 
+            ArrayList<Boolean> isResolved = new ArrayList<Boolean>();
+            ArrayList<Boolean> isResolvedAndParameterMatch = new ArrayList<Boolean>();
+            for (int i = 0; i < queries.size(); i++) {
+                isMethodMatch.add(false);
+                isResolved.add(false);
+                isResolvedAndParameterMatch.add(false);
+            }
+
+            for (int i = 0; i < queries.size(); i++) {
+                final int index = i; 
+                Query query = queries.get(index);
+                cu.findAll(MethodCallExpr.class).forEach(mce -> {
+                    if (mce.getName().toString().equals(query.getMethod()) && mce.getArguments().size() == query.getArguments().size()) {
+                        isMethodMatch.set(index, true);
                         try {
-                            failWriter.write("\n\nFile: " + file);
-                            failWriter.write("\nError metod: " + mce);
-                        } catch (IOException io) {
+                            ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
+                            isResolved.set(index, true);
+                            boolean isArgumentTypeMatch = true;
+                            for (int j = 0; j < resolvedMethodDeclaration.getNumberOfParams(); j++) {
+                                if (!query.getArguments().get(j).equals(resolvedMethodDeclaration.getParam(j).describeType())){
+                                    isArgumentTypeMatch = false;
+                                    break;
+                                }
+                            }
+                            if (isArgumentTypeMatch) {
+                                isResolvedAndParameterMatch.set(index, true);
+                            }
+                        } catch (UnsolvedSymbolException unsolvedSymbolException) {
+                            isResolved.set(index, false);   
                         }
-                        // e.printStackTrace();
-                    } catch (IOException io1) {
-                        System.out.println("IO Exception");
                     }
+                });
+            }
+
+
+            boolean isSuccess = true;
+            logWriter.write("\n\nFile: " + file);
+            for (int i = 0; i < queries.size(); i++) {
+                logWriter.write("\nQuery " + (i+1) + ": " + queries.get(i));
+                System.out.println("\nQuery " + (i+1) + ": " + queries.get(i));
+                if (isMethodMatch.get(i)){
+                    if (isResolved.get(i)) {
+                        if (isResolvedAndParameterMatch.get(i)) {
+                            logWriter.write("\nResolved and match argument type");
+                            System.out.println("Resolved and match argument type");
+                        } else {
+                            isSuccess = false;
+                            logWriter.write("\nResolved but argument type doesn't match :" + queries.get(i).getArguments());
+                            System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
+                        }
+                    } else {
+                        isSuccess = false;
+                        logWriter.write("\nCan't resolve :" + queries.get(i).getMethod());
+                        System.out.println("Can't resolve :" + queries.get(i).getMethod());
+                    }
+                } else {
+                    isSuccess = false;
+                    logWriter.write("\nNo method match :" + queries.get(i).getMethod());
+                    System.out.println("No method match :" + queries.get(i).getMethod());
                 }
-            });
+            }
+
+            if (isSuccess) {
+                successWriter.write("\n\nFile: " + file);
+                successWriter.write("\nSUCCESS");
+                System.out.println("SUCCESS");
+            }
 
         } catch (ParseProblemException parseProblemException) {
             System.out.println("Parse Problem Exception");
-        } catch (RuntimeException runtimeException){
-            // try {
-            //     successWriter.close();
-            //     failWriter.close();
-            // } catch (IOException e) {
-            //     // TODO Auto-generated catch block
-            //     e.printStackTrace();
-            // }
-            // runtimeException.printStackTrace();
-        } catch (IOException io2) {
-            io2.printStackTrace();
+        } catch (IOException io) {
+            System.out.println("IO Exception in Type Resolution");
         }
         
     }
