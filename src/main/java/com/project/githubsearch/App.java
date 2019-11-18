@@ -59,9 +59,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeS
 public class App {
 
     // run multiple token
-    private static final String AUTH_TOKEN = System.getenv("GITHUB_AUTH_TOKEN");
-    private static final String AUTH_TOKEN_2 = System.getenv("GITHUB_AUTH_TOKEN_2");
-    private static int lastToken = 1;
+    // please make sure that the number of thread is equal with the number of tokens
     private static final int NUMBER_THREADS = 3;
   
     // parameter for the request

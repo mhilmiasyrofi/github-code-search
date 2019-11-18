@@ -7,6 +7,7 @@ public class SynchronizedFeeder {
     
     public SynchronizedFeeder() {
         tokens = new ArrayList<GithubToken>();
+        // please make sure that the number of thread is equal with the number of tokens
         tokens.add(new GithubToken(System.getenv("GITHUB_AUTH_TOKEN_1")));
         tokens.add(new GithubToken(System.getenv("GITHUB_AUTH_TOKEN_2")));
         tokens.add(new GithubToken(System.getenv("GITHUB_AUTH_TOKEN_3")));
