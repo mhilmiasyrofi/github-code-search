@@ -31,6 +31,8 @@ import com.project.githubsearch.model.MavenPackage;
 import com.project.githubsearch.model.Query;
 import com.project.githubsearch.model.Response;
 import com.project.githubsearch.model.SynchronizedData;
+import com.project.githubsearch.model.SynchronizedFeeder;
+import com.project.githubsearch.model.Token;
 import com.project.githubsearch.utils.DirExplorer;
 
 import org.json.JSONArray;
@@ -60,6 +62,7 @@ public class App {
     private static final String AUTH_TOKEN = System.getenv("GITHUB_AUTH_TOKEN");
     private static final String AUTH_TOKEN_2 = System.getenv("GITHUB_AUTH_TOKEN_2");
     private static int lastToken = 1;
+    private static final int NUMBER_THREADS = 3;
   
     // parameter for the request
     private static final String PARAM_QUERY = "q"; //$NON-NLS-1$
@@ -78,7 +81,6 @@ public class App {
     private static final int ABUSE_RATE_LIMITS = 403;
     private static final int UNPROCESSABLE_ENTITY = 422;
 
-    private static final int NUMBER_THREADS = 4;
     private static final long INFINITY = -1;
     private static long MAX_DATA = INFINITY;
 
@@ -87,12 +89,13 @@ public class App {
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
 
     private static SynchronizedData synchronizedData = new SynchronizedData();
+    private static SynchronizedFeeder synchronizedFeeder = new SynchronizedFeeder();
 
     public static void main(String[] args) {
         ArrayList<Query> queries = inputQuery();
         printQuery(queries);
 
-        MAX_DATA = 1000;
+        MAX_DATA = 3000;
         
         initUniqueFolderToSaveData(queries);
         searchCode(queries);
@@ -212,7 +215,7 @@ public class App {
         // path to save the github code response
         String pathToSaveGithubResponse = DATA_LOCATION + "data.json";
         getData(queries, pathToSaveGithubResponse);
-        downloadData(pathToSaveGithubResponse);
+        // downloadData(pathToSaveGithubResponse);
     }
 
     private static void getData(ArrayList<Query> queries, String pathFile) {
@@ -327,18 +330,27 @@ public class App {
 
                 int lastPage = (int) Math.ceil(total_count / 100.0);
 
+                System.out.println("=====================");
+                System.out.println("Multi-threading start");
+                System.out.println("=====================");
+                
                 ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
-
+                
                 for (int j = 2; j <= lastPage; j++) {
                     page = j;
+                    System.out.println("---- Page: " + j);
                     Runnable worker = new URLRunnable(endpoint, stringQuery, lower_bound, upper_bound, page, per_page_limit);
                     executor.execute(worker);
                 }
-
+                
                 executor.shutdown();
                 // Wait until all threads are finish
                 while (!executor.isTerminated()) {
                 }
+
+                System.out.println("=====================");
+                System.out.println("Multi-threading end");
+                System.out.println("=====================");
 
                 lower_bound = upper_bound;
 
@@ -380,8 +392,8 @@ public class App {
         public void run() {
             Response response = handleGithubRequestWithUrl(url);
             JSONArray item = response.getItem();
-            System.out.println("Request: " + response.getUrlRequest());
-            System.out.println("Number items: " + item.length());
+            // System.out.println("Request: " + response.getUrlRequest());
+            // System.out.println("Number items: " + item.length());
             synchronizedData.addArray(item);
         }
     }
@@ -474,23 +486,17 @@ public class App {
         boolean response_ok = false;
         Response response = new Response();
         int responseCode;
-
-        do {
-
-            HttpRequest request;
-
-            // encode the space into %20
-            url = url.replace(" ", "%20");
-
-            if (lastToken == 1) {
-                lastToken = 2;
-                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN);
-            } else {
-                lastToken = 1;
-                request = HttpRequest.get(url, false).authorization("token " + AUTH_TOKEN_2);
-            }
-
-            // System.out.println("Request: " + request);
+        
+        // encode the space into %20
+        url = url.replace(" ", "%20");
+        Token token = synchronizedFeeder.getAvailableToken();
+        
+        do {    
+            HttpRequest request = HttpRequest.get(url, false).authorization("token " + token.getToken());
+            System.out.println();
+            System.out.println("Request: " + request);
+            System.out.println("Token: " + token);
+            System.out.println("Thread: " + Thread.currentThread().toString());
 
             // handle response
             responseCode = request.code();
@@ -536,6 +542,10 @@ public class App {
             }
 
         } while (!response_ok && responseCode != UNPROCESSABLE_ENTITY);
+
+
+        System.out.println("--- Thread " + Thread.currentThread() + " END ");
+        synchronizedFeeder.releaseToken(token.getId());
 
         return response;
     }
