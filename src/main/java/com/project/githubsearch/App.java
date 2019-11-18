@@ -32,7 +32,7 @@ import com.project.githubsearch.model.Query;
 import com.project.githubsearch.model.Response;
 import com.project.githubsearch.model.SynchronizedData;
 import com.project.githubsearch.model.SynchronizedFeeder;
-import com.project.githubsearch.model.Token;
+import com.project.githubsearch.model.GithubToken;
 import com.project.githubsearch.utils.DirExplorer;
 
 import org.json.JSONArray;
@@ -95,7 +95,7 @@ public class App {
         ArrayList<Query> queries = inputQuery();
         printQuery(queries);
 
-        MAX_DATA = 3000;
+        MAX_DATA = 1000;
         
         initUniqueFolderToSaveData(queries);
         searchCode(queries);
@@ -338,7 +338,6 @@ public class App {
                 
                 for (int j = 2; j <= lastPage; j++) {
                     page = j;
-                    System.out.println("---- Page: " + j);
                     Runnable worker = new URLRunnable(endpoint, stringQuery, lower_bound, upper_bound, page, per_page_limit);
                     executor.execute(worker);
                 }
@@ -348,9 +347,9 @@ public class App {
                 while (!executor.isTerminated()) {
                 }
 
-                System.out.println("=====================");
+                System.out.println("===================");
                 System.out.println("Multi-threading end");
-                System.out.println("=====================");
+                System.out.println("===================");
 
                 lower_bound = upper_bound;
 
@@ -489,7 +488,7 @@ public class App {
         
         // encode the space into %20
         url = url.replace(" ", "%20");
-        Token token = synchronizedFeeder.getAvailableToken();
+        GithubToken token = synchronizedFeeder.getAvailableGithubToken();
         
         do {    
             HttpRequest request = HttpRequest.get(url, false).authorization("token " + token.getToken());
@@ -544,8 +543,8 @@ public class App {
         } while (!response_ok && responseCode != UNPROCESSABLE_ENTITY);
 
 
-        System.out.println("--- Thread " + Thread.currentThread() + " END ");
-        synchronizedFeeder.releaseToken(token.getId());
+        System.out.println("--- " + Thread.currentThread() + " END ");
+        synchronizedFeeder.releaseToken(token);
 
         return response;
     }
