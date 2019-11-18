@@ -61,12 +61,12 @@ public class App {
     // run multiple token
     // please make sure that the number of thread is equal with the number of tokens
     private static final int NUMBER_THREADS = 3;
-  
+
     // parameter for the request
     private static final String PARAM_QUERY = "q"; //$NON-NLS-1$
     private static final String PARAM_PAGE = "page"; //$NON-NLS-1$
     private static final String PARAM_PER_PAGE = "per_page"; //$NON-NLS-1$
-    
+
     // links from the response header
     private static final String META_REL = "rel"; //$NON-NLS-1$
     private static final String META_NEXT = "next"; //$NON-NLS-1$
@@ -83,8 +83,9 @@ public class App {
     private static long MAX_DATA = INFINITY;
 
     // folder location to save the downloaded files and jars
-    private static String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/"; 
+    private static String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
+    private static final String ANDROID_JAR_LOCATION = "src/main/java/com/project/githubsearch/android/";
 
     private static SynchronizedData synchronizedData = new SynchronizedData();
     private static SynchronizedFeeder synchronizedFeeder = new SynchronizedFeeder();
@@ -94,19 +95,29 @@ public class App {
         printQuery(queries);
 
         MAX_DATA = 100;
-        
+
         initUniqueFolderToSaveData(queries);
-        // searchCode(queries);
+        searchCode(queries);
 
         BufferedWriter successWriter, logWriter, packageCorruptWriter;
         try {
             successWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "success.txt"));
             logWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "fail.txt"));
             packageCorruptWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "corruptedPackage.txt"));
+
+            CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(
+                new ReflectionTypeSolver(false),
+                new JavaParserTypeSolver(new File("src/main/java"))
+                );
+                
+            List<File> androidJars = findJarFiles(new File(ANDROID_JAR_LOCATION));
+            for (File jar : androidJars) {
+                combinedTypeSolver.add(JarTypeSolver.getJarTypeSolver(jar.getPath()));
+            }
             
             List<File> files = findJavaFiles(new File(DATA_LOCATION + "files/"));
             for (File file : files) {
-                processJavaFile(file, queries, successWriter, logWriter, packageCorruptWriter);
+                processJavaFile(file, queries, combinedTypeSolver, successWriter, logWriter, packageCorruptWriter);
             }
 
             successWriter.close();
@@ -118,7 +129,7 @@ public class App {
         }
     }
 
-    private static ArrayList<Query> inputQuery(){
+    private static ArrayList<Query> inputQuery() {
         ArrayList<Query> queries = new ArrayList<Query>();
         Scanner scanner = new Scanner(System.in);
         boolean inputFinish = false;
@@ -130,7 +141,7 @@ public class App {
                 queries.add(query);
                 System.out.println("Do you want to add another query? y/n");
                 String isMultipleQuery = scanner.nextLine();
-                if (!isMultipleQuery.equals("y")){
+                if (!isMultipleQuery.equals("y")) {
                     inputFinish = true;
                 }
             }
@@ -145,7 +156,7 @@ public class App {
         System.out.println("Your Queries");
         System.out.println("============");
         for (int i = 0; i < queries.size(); i++) {
-            System.out.println("Query " + (i+1)  + ": " + queries.get(i));
+            System.out.println("Query " + (i + 1) + ": " + queries.get(i));
         }
     }
 
@@ -156,10 +167,12 @@ public class App {
         int tagLocation = s.indexOf('#');
         int leftBracketLocation = s.indexOf('(');
         int rightBracketLocation = s.indexOf(')');
-        if (tagLocation == -1 | leftBracketLocation == -1 || rightBracketLocation == -1 && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
+        if (tagLocation == -1 | leftBracketLocation == -1 || rightBracketLocation == -1
+                && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
             System.out.println("Your query isn't accepted");
             System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
-            System.out.println("Example: " + "android.app.Notification.Builder#addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
+            System.out.println("Example: "
+                    + "android.app.Notification.Builder#addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
             return query;
         } else {
             String fullyQualifiedName = s.substring(0, tagLocation);
@@ -176,7 +189,6 @@ public class App {
         }
         return query;
     }
-
 
     private static void initUniqueFolderToSaveData(ArrayList<Query> queries) {
 
@@ -220,7 +232,7 @@ public class App {
     }
 
     private static void getData(ArrayList<Query> queries, String pathFile) {
-            
+
         String stringQuery = new String("");
         for (int i = 0; i < queries.size(); i++) {
             Query query = queries.get(i);
@@ -228,7 +240,8 @@ public class App {
             for (int j = 0; j < query.getArguments().size(); j++) {
                 stringQuery += " " + query.getArguments().get(j);
             }
-            if (i != queries.size()-1) stringQuery += " ";
+            if (i != queries.size() - 1)
+                stringQuery += " ";
         }
 
         String endpoint = "https://api.github.com/search/code";
@@ -253,7 +266,8 @@ public class App {
         System.out.println("Request: " + firstResponse.getUrlRequest());
         System.out.println("Total items from github: " + firstResponse.getTotalCount());
 
-        if (firstResponse.getTotalCount() == 0) System.exit(-1);
+        if (firstResponse.getTotalCount() == 0)
+            System.exit(-1);
 
         if (MAX_DATA != INFINITY) {
             System.out.println("Not downloading all data. Just " + MAX_DATA);
@@ -288,7 +302,8 @@ public class App {
             while (lower_bound < MAX_SIZE) {
                 page = 1;
                 upper_bound = lower_bound + dynamic_interval;
-                response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page, per_page_limit);
+                response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page,
+                        per_page_limit);
                 total_count = response.getTotalCount();
 
                 if (total_count < TOTAL_COUNT_LIMIT) { // create the dynamic range higher
@@ -334,15 +349,16 @@ public class App {
                 System.out.println("=====================");
                 System.out.println("Multi-threading start");
                 System.out.println("=====================");
-                
+
                 ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
-                
+
                 for (int j = 2; j <= lastPage; j++) {
                     page = j;
-                    Runnable worker = new URLRunnable(endpoint, stringQuery, lower_bound, upper_bound, page, per_page_limit);
+                    Runnable worker = new URLRunnable(endpoint, stringQuery, lower_bound, upper_bound, page,
+                            per_page_limit);
                     executor.execute(worker);
                 }
-                
+
                 executor.shutdown();
                 // Wait until all threads are finish
                 while (!executor.isTerminated()) {
@@ -402,16 +418,17 @@ public class App {
         System.out.println("\n\n=============");
         System.out.println("Download Data");
         System.out.println("=============");
-        
+
         try {
             Stream<String> lines = Files.lines(Paths.get(pathToData));
             String content = lines.collect(Collectors.joining(System.lineSeparator()));
 
             // parse json array
             JSONArray items = new JSONArray(content);
-            
+
             long n = items.length();
-            if (MAX_DATA != INFINITY) n = MAX_DATA;
+            if (MAX_DATA != INFINITY)
+                n = MAX_DATA;
 
             for (int it = 0; it < n; it++) {
                 JSONObject item = new JSONObject(items.get(it).toString());
@@ -486,12 +503,12 @@ public class App {
         boolean response_ok = false;
         Response response = new Response();
         int responseCode;
-        
+
         // encode the space into %20
         url = url.replace(" ", "%20");
         GithubToken token = synchronizedFeeder.getAvailableGithubToken();
-        
-        do {    
+
+        do {
             HttpRequest request = HttpRequest.get(url, false).authorization("token " + token.getToken());
             System.out.println();
             System.out.println("Request: " + request);
@@ -543,7 +560,6 @@ public class App {
 
         } while (!response_ok && responseCode != UNPROCESSABLE_ENTITY);
 
-
         System.out.println("--- " + Thread.currentThread() + " END ");
         synchronizedFeeder.releaseToken(token);
 
@@ -560,13 +576,13 @@ public class App {
         String url;
         Response response = new Response();
 
-        url = endpoint + "?" + PARAM_QUERY + "=" + query
-                + "+in:file+language:java+extension:java+size:" + size + "&" + PARAM_PAGE + "=" + page + "&"
-                + PARAM_PER_PAGE + "=" + per_page_limit;
+        url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size + "&"
+                + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
         response = handleGithubRequestWithUrl(url);
 
         return response;
     }
+
     private static String getNextLinkFromResponse(String linkHeader) {
 
         String next = null;
@@ -607,16 +623,14 @@ public class App {
         System.out.println();
     }
 
-    private static void processJavaFile(File file, ArrayList<Query> queries, BufferedWriter successWriter,  BufferedWriter logWriter, BufferedWriter packageCorruptWriter) {
-        try { 
+    private static void processJavaFile(File file, ArrayList<Query> queries, CombinedTypeSolver combinedTypeSolver,
+            BufferedWriter successWriter, BufferedWriter logWriter, BufferedWriter packageCorruptWriter) {
+        try {
             System.out.println();
             printSign("=", file.toString().length() + 6);
             System.out.println("File: " + file);
             printSign("=", file.toString().length() + 6);
-        
-    
-            CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
-                    new JavaParserTypeSolver(new File("src/main/java")));
+
             List<String> addedJars = getNeededJars(file);
             for (int i = 0; i < addedJars.size(); i++) {
                 try {
@@ -635,7 +649,7 @@ public class App {
             CompilationUnit cu;
             cu = StaticJavaParser.parse(file);
 
-            ArrayList<Boolean> isMethodMatch = new ArrayList<Boolean>(); 
+            ArrayList<Boolean> isMethodMatch = new ArrayList<Boolean>();
             ArrayList<Boolean> isResolved = new ArrayList<Boolean>();
             ArrayList<Boolean> isResolvedAndParameterMatch = new ArrayList<Boolean>();
             for (int i = 0; i < queries.size(); i++) {
@@ -645,28 +659,32 @@ public class App {
             }
 
             for (int i = 0; i < queries.size(); i++) {
-                final int index = i; 
+                final int index = i;
                 Query query = queries.get(index);
                 cu.findAll(MethodCallExpr.class).forEach(mce -> {
-                    if (mce.getName().toString().equals(query.getMethod()) && mce.getArguments().size() == query.getArguments().size()) {
+                    if (mce.getName().toString().equals(query.getMethod())
+                            && mce.getArguments().size() == query.getArguments().size()) {
                         isMethodMatch.set(index, true);
                         try {
                             ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
-                            String fullyQualifiedName = resolvedMethodDeclaration.getPackageName() + "." + resolvedMethodDeclaration.getClassName();
+                            String fullyQualifiedName = resolvedMethodDeclaration.getPackageName() + "."
+                                    + resolvedMethodDeclaration.getClassName();
                             System.out.println(fullyQualifiedName);
                             isResolved.set(index, true);
                             boolean isArgumentTypeMatch = true;
                             for (int j = 0; j < resolvedMethodDeclaration.getNumberOfParams(); j++) {
-                                if (!query.getArguments().get(j).equals(resolvedMethodDeclaration.getParam(j).describeType())){
+                                if (!query.getArguments().get(j)
+                                        .equals(resolvedMethodDeclaration.getParam(j).describeType())) {
                                     isArgumentTypeMatch = false;
                                     break;
                                 }
                             }
-                            if (isArgumentTypeMatch && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
+                            if (isArgumentTypeMatch
+                                    && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
-                            isResolved.set(index, false);   
+                            isResolved.set(index, false);
                         } catch (RuntimeException runtimeException) {
                             System.out.println("Runtime Exception in Type Resolution");
                         }
@@ -674,21 +692,22 @@ public class App {
                 });
             }
 
-
             boolean isSuccess = true;
             logWriter.write("\n\nFile: " + file);
             for (int i = 0; i < queries.size(); i++) {
-                logWriter.write("\nQuery " + (i+1) + ": " + queries.get(i));
-                System.out.println("\nQuery " + (i+1) + ": " + queries.get(i));
-                if (isMethodMatch.get(i)){
+                logWriter.write("\nQuery " + (i + 1) + ": " + queries.get(i));
+                System.out.println("\nQuery " + (i + 1) + ": " + queries.get(i));
+                if (isMethodMatch.get(i)) {
                     if (isResolved.get(i)) {
                         if (isResolvedAndParameterMatch.get(i)) {
                             logWriter.write("\nResolved and match argument type");
                             System.out.println("Resolved and match argument type");
                         } else {
                             isSuccess = false;
-                            logWriter.write("\nResolved but argument type doesn't match :" + queries.get(i).getArguments());
-                            System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
+                            logWriter.write(
+                                    "\nResolved but argument type doesn't match :" + queries.get(i).getArguments());
+                            System.out.println(
+                                    "Resolved but argument type doesn't match :" + queries.get(i).getArguments());
                         }
                     } else {
                         isSuccess = false;
@@ -715,12 +734,21 @@ public class App {
         } catch (IOException io) {
             System.out.println("IO Exception in Type Resolution");
         }
-        
+
     }
 
     private static List<File> findJavaFiles(File src) {
         List<File> files = new LinkedList<File>();
         new DirExplorer((level, path, file) -> path.endsWith(".txt"), (level, path, file) -> {
+            files.add(file);
+        }).explore(src);
+
+        return files;
+    }
+
+    private static List<File> findJarFiles(File src) {
+        List<File> files = new LinkedList<File>();
+        new DirExplorer((level, path, file) -> path.endsWith(".jar"), (level, path, file) -> {
             files.add(file);
         }).explore(src);
 
@@ -739,7 +767,7 @@ public class App {
             CompilationUnit cu = StaticJavaParser.parse(file);
             cu.findAll(Name.class).forEach(mce -> {
                 String[] names = mce.toString().split("[.]");
-                if (names.length >= 2) { //filter some wrong detected import like Override, SupressWarning
+                if (names.length >= 2) { // filter some wrong detected import like Override, SupressWarning
                     if (importedPackages.isEmpty()) {
                         importedPackages.add(mce.toString());
                     } else {
@@ -766,9 +794,9 @@ public class App {
         // System.out.println();
         // System.out.println("=== Imported Packages ==");
         // for (int i = 0; i < importedPackages.size(); i++) {
-        //     System.out.println(importedPackages.get(i));
+        // System.out.println(importedPackages.get(i));
         // }
-        
+
         // filter importedPackages
         // remove the project package and java predefined package
         List<String> neededPackages = new ArrayList<String>();
@@ -780,17 +808,17 @@ public class App {
                 qualifiedName = importedPackages.get(i);
                 names = qualifiedName.split("[.]");
                 String basePackage = names[0];
-                if (!basePackage.equals(projectPackage) && !basePackage.equals("java")
-                && !basePackage.equals("javax") && !basePackage.equals("Override")) {
+                if (!basePackage.equals(projectPackage) && !basePackage.equals("java") && !basePackage.equals("javax")
+                        && !basePackage.equals("Override")) {
                     neededPackages.add(importedPackages.get(i));
                 }
             }
         }
-        
+
         // System.out.println();
         // System.out.println("=== Needed Packages ==");
         // for (int i = 0; i < neededPackages.size(); i++) {
-        //     System.out.println(neededPackages.get(i));
+        // System.out.println(neededPackages.get(i));
         // }
 
         List<MavenPackage> mavenPackages = new ArrayList<MavenPackage>();
@@ -819,10 +847,11 @@ public class App {
         // System.out.println();
         // System.out.println("=== Maven Packages ==");
         // for (int i = 0; i < mavenPackages.size(); i++) {
-        //     System.out.println("GroupID: " + mavenPackages.get(i).getGroupId() + " - ArtifactID: "
-        //             + mavenPackages.get(i).getArtifactId());
+        // System.out.println("GroupID: " + mavenPackages.get(i).getGroupId() + " -
+        // ArtifactID: "
+        // + mavenPackages.get(i).getArtifactId());
         // }
-        
+
         // System.out.println();
         // System.out.println("=== Downloading Packages ==");
         for (int i = 0; i < mavenPackages.size(); i++) {
@@ -891,7 +920,8 @@ public class App {
             if (numFound > 0) {
                 mavenPackageName.setId(mavenPackages.getJSONObject(0).getString("id")); // set the id
                 mavenPackageName.setGroupId(mavenPackages.getJSONObject(0).getString("g")); // set the first group id
-                mavenPackageName.setArtifactId(mavenPackages.getJSONObject(0).getString("a")); // set the first artifact id
+                mavenPackageName.setArtifactId(mavenPackages.getJSONObject(0).getString("a")); // set the first artifact
+                                                                                               // id
                 mavenPackageName.setVersion(mavenPackages.getJSONObject(0).getString("v")); // set the first version id
             }
         } else {
