@@ -1,53 +1,35 @@
 package com.project.githubsearch.model;
 
+import java.util.ArrayList;
+
 public class SynchronizedFeeder {
-    Token token_1;
-    Token token_2;
-    Token token_3;
+    ArrayList<GithubToken> tokens;
     
     public SynchronizedFeeder() {
-        token_1 = new Token(1, System.getenv("GITHUB_AUTH_TOKEN_1"));
-        token_2 = new Token(2, System.getenv("GITHUB_AUTH_TOKEN_2"));
-        token_3 = new Token(3, System.getenv("GITHUB_AUTH_TOKEN_3"));
+        tokens = new ArrayList<GithubToken>();
+        tokens.add(new GithubToken(System.getenv("GITHUB_AUTH_TOKEN_1")));
+        tokens.add(new GithubToken(System.getenv("GITHUB_AUTH_TOKEN_2")));
+        tokens.add(new GithubToken(System.getenv("GITHUB_AUTH_TOKEN_3")));
     }
 
-    public synchronized Token getAvailableToken() {
-        if (!token_1.getUsed()) {
-            lockToken(1);
-            return token_1;
+    public synchronized GithubToken getAvailableGithubToken() {
+        GithubToken token = this.tokens.get(1);
+        for (int i = 0; i < this.tokens.size(); i++) {
+            if (!this.tokens.get(i).getUsed()) {
+                this.tokens.get(i).setUsed(true);
+                return tokens.get(i);
+            } 
         }
-        if (!token_2.getUsed()) {
-            lockToken(2);
-            return token_2;
-        }
-        if (!token_3.getUsed()) {
-            lockToken(3);
-            return token_3;
-        }
-        return token_1;
+        return token;
     }
 
-    public synchronized void lockToken(int id) {
-        if (id == 1){
-            token_1.setUsed(true);
-        } else if (id == 2) {
-            token_2.setUsed(true);
-        } else if (id == 3) {
-            token_3.setUsed(true);
+    public synchronized void releaseToken(GithubToken token) {
+        for (int i = 0; i < this.tokens.size(); i++) {
+            if (this.tokens.get(i).getToken().equals(token.getToken())) {
+                this.tokens.get(i).setUsed(false);
+                break;
+            }
         }
     }
-
-    public synchronized void releaseToken(int id) {
-        if (id == 1){
-            token_1.setUsed(false);
-        } else if (id == 2) {
-            token_2.setUsed(false);
-        } else if (id == 3) {
-            token_3.setUsed(false);
-        }
-    }
-
-
-    
     
 }

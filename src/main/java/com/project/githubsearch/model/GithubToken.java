@@ -1,21 +1,12 @@
 package com.project.githubsearch.model;
 
-public class Token {
-    int id;
+public class GithubToken {
     String token;
     boolean used;
     
-    public Token(int id, String token) {
-        this.id = id;
+    public GithubToken(String token) {
         this.token = token;
         this.used = false;
-    }
-
-    /**
-     * @return the id
-     */
-    public int getId() {
-        return id;
     }
 
     /**
@@ -30,13 +21,6 @@ public class Token {
      */
     public boolean getUsed() {
         return used;
-    }
-
-    /**
-     * @param id the id to set
-     */
-    public void setId(int id) {
-        this.id = id;
     }
 
     /**
