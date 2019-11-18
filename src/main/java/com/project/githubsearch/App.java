@@ -92,7 +92,7 @@ public class App {
         ArrayList<Query> queries = inputQuery();
         printQuery(queries);
 
-        MAX_DATA = 10;
+        MAX_DATA = 1000;
         
         initUniqueFolderToSaveData(queries);
         searchCode(queries);
@@ -655,6 +655,8 @@ public class App {
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);   
+                        } catch (RuntimeException runtimeException) {
+                            System.out.println("Runtime Exception in Type Resolution");
                         }
                     }
                 });
@@ -695,7 +697,9 @@ public class App {
             }
 
         } catch (ParseProblemException parseProblemException) {
-            System.out.println("Parse Problem Exception");
+            System.out.println("Parse Problem Exception in Type Resolution");
+        } catch (RuntimeException runtimeException) {
+            System.out.println("Runtime Exception in Type Resolution");
         } catch (IOException io) {
             System.out.println("IO Exception in Type Resolution");
         }
