@@ -3,10 +3,12 @@ package com.project.githubsearch.model;
 import java.util.ArrayList;
 
 public class Query {
+    private String fullyQualifiedName;
     private String method;
     private ArrayList<String> arguments;
 
     public Query() {
+        this.fullyQualifiedName = "";
         this.method = "";
         this.arguments = new ArrayList<String>();
     }
@@ -19,10 +21,24 @@ public class Query {
     }
 
     /**
+     * @return the fullyQualifiedName
+     */
+    public String getFullyQualifiedName() {
+        return fullyQualifiedName;
+    }
+
+    /**
      * @return the method
      */
     public String getMethod() {
         return method;
+    }
+
+    /**
+     * @param fullyQualifiedName the fullyQualifiedName to set
+     */
+    public void setFullyQualifiedName(String fullyQualifiedName) {
+        this.fullyQualifiedName = fullyQualifiedName;
     }
 
     /**
@@ -41,7 +57,7 @@ public class Query {
 
     @Override
     public String toString() {
-        String query = "" + this.method;
+        String query = ""  + this.fullyQualifiedName + "#" + this.method;
         query += "(";
         for (int i = 0; i < this.arguments.size(); i++) {
             if (i != this.arguments.size()-1){

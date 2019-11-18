@@ -93,10 +93,10 @@ public class App {
         ArrayList<Query> queries = inputQuery();
         printQuery(queries);
 
-        MAX_DATA = 1000;
+        MAX_DATA = 100;
         
         initUniqueFolderToSaveData(queries);
-        searchCode(queries);
+        // searchCode(queries);
 
         BufferedWriter successWriter, logWriter, packageCorruptWriter;
         try {
@@ -153,21 +153,24 @@ public class App {
         Query query = new Query();
 
         s = s.replace(" ", "");
+        int tagLocation = s.indexOf('#');
         int leftBracketLocation = s.indexOf('(');
         int rightBracketLocation = s.indexOf(')');
-        if (leftBracketLocation == -1 || rightBracketLocation == -1) {
+        if (tagLocation == -1 | leftBracketLocation == -1 || rightBracketLocation == -1 && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
             System.out.println("Your query isn't accepted");
             System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
-            System.out.println("Example: " + "addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
+            System.out.println("Example: " + "android.app.Notification.Builder#addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
             return query;
         } else {
-            String method = s.substring(0, leftBracketLocation);
+            String fullyQualifiedName = s.substring(0, tagLocation);
+            String method = s.substring(tagLocation + 1, leftBracketLocation);
             String args = s.substring(leftBracketLocation + 1, rightBracketLocation);
             String[] arr = args.split(",");
             ArrayList<String> arguments = new ArrayList<String>();
             for (int i = 0; i < arr.length; i++) {
                 arguments.add(arr[i]);
             }
+            query.setFullyQualifiedName(fullyQualifiedName);
             query.setMethod(method);
             query.setArguments(arguments);
         }
@@ -213,7 +216,7 @@ public class App {
         // path to save the github code response
         String pathToSaveGithubResponse = DATA_LOCATION + "data.json";
         getData(queries, pathToSaveGithubResponse);
-        // downloadData(pathToSaveGithubResponse);
+        downloadData(pathToSaveGithubResponse);
     }
 
     private static void getData(ArrayList<Query> queries, String pathFile) {
@@ -649,6 +652,8 @@ public class App {
                         isMethodMatch.set(index, true);
                         try {
                             ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
+                            String fullyQualifiedName = resolvedMethodDeclaration.getPackageName() + "." + resolvedMethodDeclaration.getClassName();
+                            System.out.println(fullyQualifiedName);
                             isResolved.set(index, true);
                             boolean isArgumentTypeMatch = true;
                             for (int j = 0; j < resolvedMethodDeclaration.getNumberOfParams(); j++) {
@@ -657,7 +662,7 @@ public class App {
                                     break;
                                 }
                             }
-                            if (isArgumentTypeMatch) {
+                            if (isArgumentTypeMatch && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
