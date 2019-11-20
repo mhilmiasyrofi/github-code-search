@@ -178,10 +178,12 @@ public class App {
             String fullyQualifiedName = s.substring(0, tagLocation);
             String method = s.substring(tagLocation + 1, leftBracketLocation);
             String args = s.substring(leftBracketLocation + 1, rightBracketLocation);
-            String[] arr = args.split(",");
             ArrayList<String> arguments = new ArrayList<String>();
-            for (int i = 0; i < arr.length; i++) {
-                arguments.add(arr[i]);
+            if (!args.equals("")) { // handle if no arguments
+                String[] arr = args.split(",");
+                for (int i = 0; i < arr.length; i++) {
+                    arguments.add(arr[i]);
+                }
             }
             query.setFullyQualifiedName(fullyQualifiedName);
             query.setMethod(method);

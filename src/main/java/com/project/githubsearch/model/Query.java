@@ -63,9 +63,10 @@ public class Query {
             if (i != this.arguments.size()-1){
                 query += this.arguments.get(i) + ", ";
             } else {
-                query += this.arguments.get(i) + ")";
+                query += this.arguments.get(i);
             }
         }
+        query += ")";
         return query;
     }
 
