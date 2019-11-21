@@ -19,6 +19,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -87,46 +88,232 @@ public class App {
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
     private static final String ANDROID_JAR_LOCATION = "src/main/java/com/project/githubsearch/android/";
 
+    private static final String endpoint = "https://api.github.com/search/code";
+
     private static SynchronizedData synchronizedData = new SynchronizedData();
     private static SynchronizedFeeder synchronizedFeeder = new SynchronizedFeeder();
 
     public static void main(String[] args) {
         ArrayList<Query> queries = inputQuery();
         printQuery(queries);
-
-        MAX_DATA = 100;
-
         initUniqueFolderToSaveData(queries);
-        searchCode(queries);
+        processQuery(queries);
+    }
 
-        BufferedWriter successWriter, logWriter, packageCorruptWriter;
-        try {
-            successWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "success.txt"));
-            logWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "fail.txt"));
-            packageCorruptWriter = Files.newBufferedWriter(Paths.get(DATA_LOCATION + "corruptedPackage.txt"));
+    private static void processQuery(ArrayList<Query> queries) {
+        String query = prepareQuery(queries);
 
-            CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(
-                new ReflectionTypeSolver(false),
-                new JavaParserTypeSolver(new File("src/main/java"))
-                );
-                
+        int lower_bound, upper_bound, page, per_page_limit;
+        lower_bound = 0;
+        upper_bound = 384000;
+        page = 1;
+        per_page_limit = 30;
+
+        Response response = handleCustomGithubRequest(query, lower_bound, upper_bound, page, per_page_limit);
+        String nextUrlRequest;
+        if (response.getTotalCount() == 0) {
+            System.out.println("No item match with the query");
+        } else {
+            JSONArray item = response.getItem();
+            nextUrlRequest = response.getNextUrlRequest();
+
+            Queue<String> data = new LinkedList<>();
+            for (int it = 0; it < item.length(); it++) {
+                JSONObject instance = new JSONObject(item.get(it).toString());
+                data.add(instance.getString("html_url"));
+            }
+
+            int id = 0;
+            boolean isDownloaded;
+            ArrayList<String> urls = new ArrayList<>();
+            CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
+                new JavaParserTypeSolver(new File("src/main/java")));
+
             List<File> androidJars = findJarFiles(new File(ANDROID_JAR_LOCATION));
             for (File jar : androidJars) {
-                combinedTypeSolver.add(JarTypeSolver.getJarTypeSolver(jar.getPath()));
-            }
-            
-            List<File> files = findJavaFiles(new File(DATA_LOCATION + "files/"));
-            for (File file : files) {
-                processJavaFile(file, queries, combinedTypeSolver, successWriter, logWriter, packageCorruptWriter);
+                try {
+                    combinedTypeSolver.add(JarTypeSolver.getJarTypeSolver(jar.getPath()));
+                } catch (IOException e) {
+                    System.out.println("Can't add the jar: " + jar);
+                    // TODO Auto-generated catch block
+                    // e.printStackTrace();
+                }
             }
 
-            successWriter.close();
-            logWriter.close();
-            packageCorruptWriter.close();
-        } catch (IOException ioException) {
-            // ioException.printStackTrace();
-            System.out.println("IO Exception");
+            while (!data.isEmpty()) {
+                if (data.size() < 5) {
+                    response = handleGithubRequestWithUrl(nextUrlRequest);
+                    item = response.getItem();
+                    nextUrlRequest = response.getNextUrlRequest();
+                    for (int it = 0; it < item.length(); it++) {
+                        JSONObject instance = new JSONObject(item.get(it).toString());
+                        data.add(instance.getString("html_url"));
+                    }
+                }
+                String htmlUrl = data.remove();
+                urls.add(htmlUrl);
+                isDownloaded = downloadFile(htmlUrl, id);
+                if (isDownloaded) {
+                    resolveFile(id, queries, combinedTypeSolver);
+                }
+                id = id + 1;
+            }
         }
+
+    }
+
+    private static boolean downloadFile(String htmlUrl, int fileId) {
+        // convert html url to downloadable url
+        // based on my own analysis
+        String downloadableUrl = convertHTMLUrlToDownloadUrl(htmlUrl);
+
+        // using it to make a unique name
+        // replace java to txt for excluding from maven builder
+        String fileName = fileId + ".txt";
+
+        // System.out.println();
+        // System.out.println("Downloading the file: " + (fileId));
+        // System.out.println("HTML Url: " + htmlUrl);
+
+        boolean finished = false;
+
+        try {
+            // download file from url
+            URL url;
+            url = new URL(downloadableUrl);
+            ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
+            String pathFile = new String(DATA_LOCATION + "files/" + fileName);
+            FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
+            fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+            fileOutputStream.close();
+            finished = true;
+        } catch (FileNotFoundException e) {
+            System.out.println("Can't download the github file");
+            System.out.println("File not found!");
+        } catch (MalformedURLException e) {
+            System.out.println("Malformed URL Exception while downloading!");
+            e.printStackTrace();
+        } catch (IOException e) {
+            System.out.println("Can't save the downloaded file");
+        }
+
+        return finished;
+    }
+
+    private static void resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
+        String pathFile = new String(DATA_LOCATION + "files/" + fileId + ".txt");
+
+        File file = new File(pathFile);
+
+        try {
+            System.out.println();
+            printSign("=", file.toString().length() + 6);
+            System.out.println("File: " + file);
+            printSign("=", file.toString().length() + 6);
+
+            List<String> addedJars = getNeededJars(file);
+            for (int i = 0; i < addedJars.size(); i++) {
+                try {
+                    TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
+                    solver.add(jarTypeSolver);
+                } catch (Exception e) {
+                    System.out.println("Package corrupt!");
+                    System.out.println("Corrupted Jars: " + addedJars.get(i));
+                }
+            }
+            StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(solver));
+            CompilationUnit cu;
+            cu = StaticJavaParser.parse(file);
+
+            ArrayList<Boolean> isMethodMatch = new ArrayList<Boolean>();
+            ArrayList<Boolean> isResolved = new ArrayList<Boolean>();
+            ArrayList<Boolean> isResolvedAndParameterMatch = new ArrayList<Boolean>();
+
+            for (int i = 0; i < queries.size(); i++) {
+                isMethodMatch.add(false);
+                isResolved.add(false);
+                isResolvedAndParameterMatch.add(false);
+            }
+
+            for (int i = 0; i < queries.size(); i++) {
+                final int index = i;
+                Query query = queries.get(index);
+                cu.findAll(MethodCallExpr.class).forEach(mce -> {
+                    if (mce.getName().toString().equals(query.getMethod())
+                            && mce.getArguments().size() == query.getArguments().size()) {
+                        isMethodMatch.set(index, true);
+                        try {
+                            ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
+                            String fullyQualifiedName = resolvedMethodDeclaration.getPackageName() + "."
+                                    + resolvedMethodDeclaration.getClassName();
+                            isResolved.set(index, true);
+                            boolean isArgumentTypeMatch = true;
+                            for (int j = 0; j < resolvedMethodDeclaration.getNumberOfParams(); j++) {
+                                if (!query.getArguments().get(j)
+                                        .equals(resolvedMethodDeclaration.getParam(j).describeType())) {
+                                    isArgumentTypeMatch = false;
+                                    break;
+                                }
+                            }
+                            if (isArgumentTypeMatch
+                                    && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
+                                isResolvedAndParameterMatch.set(index, true);
+                            }
+                        } catch (UnsolvedSymbolException unsolvedSymbolException) {
+                            isResolved.set(index, false);
+                        } 
+                    }
+                });
+            }
+
+            boolean isSuccess = true;
+            for (int i = 0; i < queries.size(); i++) {
+                System.out.println("\nQuery " + (i + 1) + ": " + queries.get(i));
+                if (isMethodMatch.get(i)) {
+                    if (isResolved.get(i)) {
+                        if (isResolvedAndParameterMatch.get(i)) {
+                            System.out.println("Resolved and match argument type");
+                        } else {
+                            isSuccess = false;
+                            System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
+                        }
+                    } else {
+                        isSuccess = false;
+                        System.out.println("Can't resolve :" + queries.get(i).getMethod());
+                    }
+                } else {
+                    isSuccess = false;
+                    System.out.println("No method match :" + queries.get(i).getMethod());
+                }
+            }
+
+            if (isSuccess) {
+                System.out.println("SUCCESS");
+            }
+
+        } catch (ParseProblemException parseProblemException) {
+            System.out.println("Parse Problem Exception in Type Resolution");
+        } catch (RuntimeException runtimeException) {
+            System.out.println("Runtime Exception in Type Resolution");
+        } catch (IOException io) {
+            System.out.println("IO Exception in Type Resolution");
+        }
+        
+    }
+
+    private static String prepareQuery(ArrayList<Query> queries) {
+        String stringQuery = "";
+        for (int i = 0; i < queries.size(); i++) {
+            Query query = queries.get(i);
+            stringQuery += query.getMethod();
+            for (int j = 0; j < query.getArguments().size(); j++) {
+                stringQuery += " " + query.getArguments().get(j);
+            }
+            if (i != queries.size() - 1)
+                stringQuery += " ";
+        }
+
+        return stringQuery;
     }
 
     private static ArrayList<Query> inputQuery() {
@@ -226,254 +413,6 @@ public class App {
 
     }
 
-    private static void searchCode(ArrayList<Query> queries) {
-        // path to save the github code response
-        String pathToSaveGithubResponse = DATA_LOCATION + "data.json";
-        getData(queries, pathToSaveGithubResponse);
-        downloadData(pathToSaveGithubResponse);
-    }
-
-    private static void getData(ArrayList<Query> queries, String pathFile) {
-
-        String stringQuery = new String("");
-        for (int i = 0; i < queries.size(); i++) {
-            Query query = queries.get(i);
-            stringQuery += query.getMethod();
-            for (int j = 0; j < query.getArguments().size(); j++) {
-                stringQuery += " " + query.getArguments().get(j);
-            }
-            if (i != queries.size() - 1)
-                stringQuery += " ";
-        }
-
-        String endpoint = "https://api.github.com/search/code";
-
-        final int MAX_SIZE = 384000; // the max searchable size from github api
-        final int TOTAL_COUNT_LIMIT = 1000;
-        int INITIAL_INTERVAL = 2048;
-        int lower_bound = 0;
-        int total_count = 0;
-        int dynamic_interval, upper_bound;
-
-        int per_page_limit = 100;
-        int page = 1;
-
-        System.out.println("\n\n========================");
-        System.out.println("Getting Data from Github");
-        System.out.println("========================");
-        System.out.println("\nPer page limit: " + per_page_limit);
-
-        Response firstResponse = handleCustomGithubRequest(endpoint, stringQuery, 0, MAX_SIZE, page, per_page_limit);
-        System.out.println();
-        System.out.println("Request: " + firstResponse.getUrlRequest());
-        System.out.println("Total items from github: " + firstResponse.getTotalCount());
-
-        if (firstResponse.getTotalCount() == 0)
-            System.exit(-1);
-
-        if (MAX_DATA != INFINITY) {
-            System.out.println("Not downloading all data. Just " + MAX_DATA);
-        }
-        System.out.println();
-
-        if (firstResponse.getTotalCount() < 1000) {
-
-            Response response = firstResponse;
-            JSONArray item = response.getItem();
-            System.out.println("Request: " + response.getUrlRequest());
-            System.out.println("Number items: " + item.length());
-            synchronizedData.addArray(item);
-
-            int lastPage = (int) Math.ceil(firstResponse.getTotalCount() / 100.0);
-
-            ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
-            for (int j = 2; j <= lastPage; j++) {
-                page = j;
-                Runnable worker = new URLRunnable(endpoint, stringQuery, 0, MAX_SIZE, page, per_page_limit);
-                executor.execute(worker);
-            }
-
-            executor.shutdown();
-            // Wait until all threads are finish
-            while (!executor.isTerminated()) {
-            }
-
-        } else {
-            dynamic_interval = INITIAL_INTERVAL;
-            Response response = new Response();
-            while (lower_bound < MAX_SIZE) {
-                page = 1;
-                upper_bound = lower_bound + dynamic_interval;
-                response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page,
-                        per_page_limit);
-                total_count = response.getTotalCount();
-
-                if (total_count < TOTAL_COUNT_LIMIT) { // create the dynamic range higher
-                    System.out.println("Create the dynamic interval higher");
-                    while (total_count < 200 && upper_bound < MAX_SIZE) {
-                        dynamic_interval = dynamic_interval * 2;
-                        upper_bound = lower_bound + dynamic_interval;
-                        int prev_total_count = total_count;
-                        response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page,
-                                per_page_limit);
-                        total_count = response.getTotalCount();
-                        if (total_count > TOTAL_COUNT_LIMIT) {
-                            total_count = prev_total_count;
-                            dynamic_interval = (int) dynamic_interval / 2;
-                            upper_bound = lower_bound + dynamic_interval;
-                        }
-                        System.out.println("Dynamic interval: " + dynamic_interval);
-                    }
-                } else { // create the dynamic interval smaller
-                    System.out.println("Create the dynamic interval smaller");
-                    do {
-                        dynamic_interval = (int) dynamic_interval / 2;
-                        upper_bound = lower_bound + dynamic_interval;
-                        response = handleCustomGithubRequest(endpoint, stringQuery, lower_bound, upper_bound, page,
-                                per_page_limit);
-                        total_count = response.getTotalCount();
-                        System.out.println("Dynamic interval: " + dynamic_interval);
-                    } while (total_count > TOTAL_COUNT_LIMIT && dynamic_interval > 1);
-                }
-
-                System.out.println("");
-                System.out.println("Lower bound: " + lower_bound);
-                System.out.println("Upper bound: " + upper_bound);
-                System.out.println("Total count in this range size: " + total_count);
-
-                JSONArray item = response.getItem();
-                System.out.println("Request: " + response.getUrlRequest());
-                System.out.println("Number items: " + item.length());
-                synchronizedData.addArray(item);
-
-                int lastPage = (int) Math.ceil(total_count / 100.0);
-
-                System.out.println("=====================");
-                System.out.println("Multi-threading start");
-                System.out.println("=====================");
-
-                ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
-
-                for (int j = 2; j <= lastPage; j++) {
-                    page = j;
-                    Runnable worker = new URLRunnable(endpoint, stringQuery, lower_bound, upper_bound, page,
-                            per_page_limit);
-                    executor.execute(worker);
-                }
-
-                executor.shutdown();
-                // Wait until all threads are finish
-                while (!executor.isTerminated()) {
-                }
-
-                System.out.println("===================");
-                System.out.println("Multi-threading end");
-                System.out.println("===================");
-
-                lower_bound = upper_bound;
-
-                if (MAX_DATA != INFINITY) {
-                    if (synchronizedData.getData().length() > MAX_DATA) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        System.out.println("\nTotal items for all requests: " + synchronizedData.getData().length());
-
-        try {
-            Writer output = null;
-            File file = new File(pathFile);
-            output = new BufferedWriter(new FileWriter(file));
-            output.write(synchronizedData.getData().toString());
-            output.close();
-        } catch (IOException e) {
-            System.out.println("\nEXCEPTION");
-            System.out.println("Can't save the data to external file!");
-            System.exit(-1);
-        }
-    }
-
-    public static class URLRunnable implements Runnable {
-        private final String url;
-
-        URLRunnable(String endpoint, String query, int lower_bound, int upper_bound, int page, int per_page_limit) {
-            upper_bound++;
-            lower_bound--;
-            String size = lower_bound + ".." + upper_bound; // lower_bound < size < upper_bound
-            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size
-                    + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
-        }
-
-        @Override
-        public void run() {
-            Response response = handleGithubRequestWithUrl(url);
-            JSONArray item = response.getItem();
-            // System.out.println("Request: " + response.getUrlRequest());
-            // System.out.println("Number items: " + item.length());
-            synchronizedData.addArray(item);
-        }
-    }
-
-    private static void downloadData(String pathToData) {
-        System.out.println("\n\n=============");
-        System.out.println("Download Data");
-        System.out.println("=============");
-
-        try {
-            Stream<String> lines = Files.lines(Paths.get(pathToData));
-            String content = lines.collect(Collectors.joining(System.lineSeparator()));
-
-            // parse json array
-            JSONArray items = new JSONArray(content);
-
-            long n = items.length();
-            if (MAX_DATA != INFINITY)
-                n = MAX_DATA;
-
-            for (int it = 0; it < n; it++) {
-                JSONObject item = new JSONObject(items.get(it).toString());
-                String html_url = item.getString("html_url");
-                int id = item.getInt("id");
-
-                // convert html url to downloadable url
-                // based on my own analysis
-                String download_url = convertHTMLUrlToDownloadUrl(html_url);
-
-                String[] parts = html_url.split("/");
-                // using it to make a unique name
-                // replace java to txt for excluding from maven builder
-                String fileName = id + "_" + parts[parts.length - 1].replace(".java", ".txt");
-
-                System.out.println();
-                System.out.println("Downloading the file: " + (it + 1));
-                System.out.println("HTML Url: " + html_url);
-
-                try {
-                    // download file from url
-                    URL url;
-                    url = new URL(download_url);
-                    ReadableByteChannel readableByteChannel = Channels.newChannel(url.openStream());
-                    String pathFile = new String(DATA_LOCATION + "files/" + fileName);
-                    FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
-                    fileOutputStream.getChannel().transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
-                    fileOutputStream.close();
-                } catch (FileNotFoundException e) {
-                    System.out.println("Can't download the github file");
-                    System.out.println("File not found!");
-                } catch (MalformedURLException e) {
-                    System.out.println("Malformed URL Exception");
-                    e.printStackTrace();
-                }
-            }
-
-            lines.close();
-        } catch (IOException e) {
-            System.out.println("IO Exception");
-            e.printStackTrace();
-        }
-    }
 
     /**
      * Convert github html url to download url input:
@@ -498,6 +437,27 @@ public class App {
         }
 
         return download_url;
+    }
+
+    public static class URLRunnable implements Runnable {
+        private final String url;
+
+        URLRunnable(String query, int lower_bound, int upper_bound, int page, int per_page_limit) {
+            upper_bound++;
+            lower_bound--;
+            String size = lower_bound + ".." + upper_bound; // lower_bound < size < upper_bound
+            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size
+                    + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
+        }
+
+        @Override
+        public void run() {
+            Response response = handleGithubRequestWithUrl(url);
+            JSONArray item = response.getItem();
+            // System.out.println("Request: " + response.getUrlRequest());
+            // System.out.println("Number items: " + item.length());
+            synchronizedData.addArray(item);
+        }
     }
 
     private static Response handleGithubRequestWithUrl(String url) {
@@ -568,8 +528,8 @@ public class App {
         return response;
     }
 
-    private static Response handleCustomGithubRequest(String endpoint, String query, int lower_bound, int upper_bound,
-            int page, int per_page_limit) {
+    private static Response handleCustomGithubRequest(String query, int lower_bound, int upper_bound, int page,
+            int per_page_limit) {
         // The size range is exclusive
         upper_bound++;
         lower_bound--;
@@ -623,129 +583,6 @@ public class App {
             System.out.print(s);
         }
         System.out.println();
-    }
-
-    private static void processJavaFile(File file, ArrayList<Query> queries, CombinedTypeSolver combinedTypeSolver,
-            BufferedWriter successWriter, BufferedWriter logWriter, BufferedWriter packageCorruptWriter) {
-        try {
-            System.out.println();
-            printSign("=", file.toString().length() + 6);
-            System.out.println("File: " + file);
-            printSign("=", file.toString().length() + 6);
-
-            List<String> addedJars = getNeededJars(file);
-            for (int i = 0; i < addedJars.size(); i++) {
-                try {
-                    TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
-                    combinedTypeSolver.add(jarTypeSolver);
-                } catch (Exception e) {
-                    System.out.println("Package corrupt!");
-                    System.out.println("Corrupted Jars: " + addedJars.get(i));
-                    packageCorruptWriter.write("\n\nFile: " + file);
-                    packageCorruptWriter.write("\nPackage corrupt!");
-                    packageCorruptWriter.write("\nCorrupted Jars: " + addedJars.get(i));
-                    packageCorruptWriter.write("\nPlease download it manually from maven");
-                }
-            }
-            StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(combinedTypeSolver));
-            CompilationUnit cu;
-            cu = StaticJavaParser.parse(file);
-
-            ArrayList<Boolean> isMethodMatch = new ArrayList<Boolean>();
-            ArrayList<Boolean> isResolved = new ArrayList<Boolean>();
-            ArrayList<Boolean> isResolvedAndParameterMatch = new ArrayList<Boolean>();
-            for (int i = 0; i < queries.size(); i++) {
-                isMethodMatch.add(false);
-                isResolved.add(false);
-                isResolvedAndParameterMatch.add(false);
-            }
-
-            for (int i = 0; i < queries.size(); i++) {
-                final int index = i;
-                Query query = queries.get(index);
-                cu.findAll(MethodCallExpr.class).forEach(mce -> {
-                    if (mce.getName().toString().equals(query.getMethod())
-                            && mce.getArguments().size() == query.getArguments().size()) {
-                        isMethodMatch.set(index, true);
-                        try {
-                            ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
-                            String fullyQualifiedName = resolvedMethodDeclaration.getPackageName() + "."
-                                    + resolvedMethodDeclaration.getClassName();
-                            System.out.println(fullyQualifiedName);
-                            isResolved.set(index, true);
-                            boolean isArgumentTypeMatch = true;
-                            for (int j = 0; j < resolvedMethodDeclaration.getNumberOfParams(); j++) {
-                                if (!query.getArguments().get(j)
-                                        .equals(resolvedMethodDeclaration.getParam(j).describeType())) {
-                                    isArgumentTypeMatch = false;
-                                    break;
-                                }
-                            }
-                            if (isArgumentTypeMatch
-                                    && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
-                                isResolvedAndParameterMatch.set(index, true);
-                            }
-                        } catch (UnsolvedSymbolException unsolvedSymbolException) {
-                            isResolved.set(index, false);
-                        } catch (RuntimeException runtimeException) {
-                            System.out.println("Runtime Exception in Type Resolution");
-                        }
-                    }
-                });
-            }
-
-            boolean isSuccess = true;
-            logWriter.write("\n\nFile: " + file);
-            for (int i = 0; i < queries.size(); i++) {
-                logWriter.write("\nQuery " + (i + 1) + ": " + queries.get(i));
-                System.out.println("\nQuery " + (i + 1) + ": " + queries.get(i));
-                if (isMethodMatch.get(i)) {
-                    if (isResolved.get(i)) {
-                        if (isResolvedAndParameterMatch.get(i)) {
-                            logWriter.write("\nResolved and match argument type");
-                            System.out.println("Resolved and match argument type");
-                        } else {
-                            isSuccess = false;
-                            logWriter.write(
-                                    "\nResolved but argument type doesn't match :" + queries.get(i).getArguments());
-                            System.out.println(
-                                    "Resolved but argument type doesn't match :" + queries.get(i).getArguments());
-                        }
-                    } else {
-                        isSuccess = false;
-                        logWriter.write("\nCan't resolve :" + queries.get(i).getMethod());
-                        System.out.println("Can't resolve :" + queries.get(i).getMethod());
-                    }
-                } else {
-                    isSuccess = false;
-                    logWriter.write("\nNo method match :" + queries.get(i).getMethod());
-                    System.out.println("No method match :" + queries.get(i).getMethod());
-                }
-            }
-
-            if (isSuccess) {
-                successWriter.write("\n\nFile: " + file);
-                successWriter.write("\nSUCCESS");
-                System.out.println("SUCCESS");
-            }
-
-        } catch (ParseProblemException parseProblemException) {
-            System.out.println("Parse Problem Exception in Type Resolution");
-        } catch (RuntimeException runtimeException) {
-            System.out.println("Runtime Exception in Type Resolution");
-        } catch (IOException io) {
-            System.out.println("IO Exception in Type Resolution");
-        }
-
-    }
-
-    private static List<File> findJavaFiles(File src) {
-        List<File> files = new LinkedList<File>();
-        new DirExplorer((level, path, file) -> path.endsWith(".txt"), (level, path, file) -> {
-            files.add(file);
-        }).explore(src);
-
-        return files;
     }
 
     private static List<File> findJarFiles(File src) {
