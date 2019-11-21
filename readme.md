@@ -9,11 +9,13 @@ A java application to search an example of a java code
 
 ## Getting Started
 
-First, you should set your OAuth token into an environment variable somewhere, like:
+First, you should set your OAuth token into an environment variable, like:
 ```
-export GITHUB_OAUTH=xxxxxxx
+export GITHUB_AUTH_TOKEN_1=xxxxxxx
+export GITHUB_AUTH_TOKEN_2=xxxxxxx
+export GITHUB_AUTH_TOKEN_3=xxxxxxx
 ```
-Visit this [link](https://github.com/settings/tokens) to create it.
+Visit this [link](https://github.com/settings/tokens) to create it. If you only have one token, please write the token in each env variable. It will works also :)
 
 
 ## How to Run
