@@ -124,7 +124,7 @@ public class App {
             }
 
             int id = 0;
-            boolean isDownloaded;
+            boolean isDownloaded, isResolved;
             ArrayList<String> urls = new ArrayList<>();
             CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
                 new JavaParserTypeSolver(new File("src/main/java")));
@@ -154,7 +154,10 @@ public class App {
                 urls.add(htmlUrl);
                 isDownloaded = downloadFile(htmlUrl, id);
                 if (isDownloaded) {
-                    resolveFile(id, queries, combinedTypeSolver);
+                    isResolved = resolveFile(id, queries, combinedTypeSolver);
+                    if (isResolved) {
+                        System.out.println("File: " + urls.get(id));
+                    }
                 }
                 id = id + 1;
             }
@@ -200,7 +203,7 @@ public class App {
         return finished;
     }
 
-    private static void resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
+    private static boolean resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
         String pathFile = new String(DATA_LOCATION + "files/" + fileId + ".txt");
 
         File file = new File(pathFile);
@@ -289,6 +292,7 @@ public class App {
 
             if (isSuccess) {
                 System.out.println("SUCCESS");
+                return true;
             }
 
         } catch (ParseProblemException parseProblemException) {
@@ -298,6 +302,8 @@ public class App {
         } catch (IOException io) {
             System.out.println("IO Exception in Type Resolution");
         }
+
+        return false;
         
     }
 
