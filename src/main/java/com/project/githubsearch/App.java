@@ -94,10 +94,16 @@ public class App {
     private static SynchronizedFeeder synchronizedFeeder = new SynchronizedFeeder();
 
     public static void main(String[] args) {
-        ArrayList<Query> queries = inputQuery();
-        printQuery(queries);
-        initUniqueFolderToSaveData(queries);
-        processQuery(queries);
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Please Input Your Query: ");
+        String input = scanner.nextLine();
+        scanner.close();
+        ArrayList<Query> queries = parseQueries(input);
+        if (queries.size() > 0) {
+            printQuery(queries);
+            initUniqueFolderToSaveData(queries);
+            processQuery(queries);
+        }
     }
 
     private static void processQuery(ArrayList<Query> queries) {
@@ -127,7 +133,7 @@ public class App {
             boolean isDownloaded, isResolved;
             ArrayList<String> urls = new ArrayList<>();
             CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
-                new JavaParserTypeSolver(new File("src/main/java")));
+                    new JavaParserTypeSolver(new File("src/main/java")));
 
             List<File> androidJars = findJarFiles(new File(ANDROID_JAR_LOCATION));
             for (File jar : androidJars) {
@@ -264,7 +270,7 @@ public class App {
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);
-                        } 
+                        }
                     }
                 });
             }
@@ -278,7 +284,8 @@ public class App {
                             System.out.println("Resolved and match argument type");
                         } else {
                             isSuccess = false;
-                            System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
+                            System.out.println(
+                                    "Resolved but argument type doesn't match :" + queries.get(i).getArguments());
                         }
                     } else {
                         isSuccess = false;
@@ -304,7 +311,7 @@ public class App {
         }
 
         return false;
-        
+
     }
 
     private static String prepareQuery(ArrayList<Query> queries) {
@@ -322,28 +329,6 @@ public class App {
         return stringQuery;
     }
 
-    private static ArrayList<Query> inputQuery() {
-        ArrayList<Query> queries = new ArrayList<Query>();
-        Scanner scanner = new Scanner(System.in);
-        boolean inputFinish = false;
-        do {
-            System.out.println("Enter the query: ");
-            String stringQuery = scanner.nextLine();
-            Query query = parseQuery(stringQuery);
-            if (!query.getMethod().equals("")) {
-                queries.add(query);
-                System.out.println("Do you want to add another query? y/n");
-                String isMultipleQuery = scanner.nextLine();
-                if (!isMultipleQuery.equals("y")) {
-                    inputFinish = true;
-                }
-            }
-        } while (!inputFinish);
-        scanner.close();
-
-        return queries;
-    }
-
     private static void printQuery(ArrayList<Query> queries) {
         System.out.println("============");
         System.out.println("Your Queries");
@@ -351,6 +336,51 @@ public class App {
         for (int i = 0; i < queries.size(); i++) {
             System.out.println("Query " + (i + 1) + ": " + queries.get(i));
         }
+    }
+
+    private static ArrayList<Query> parseQueries(String s) {
+        ArrayList<Query> queries = new ArrayList<Query>();
+
+        Query query = new Query();
+
+        s = s.replace(" ", "");
+        while (!s.equals("")) {
+            int tagLocation = s.indexOf('#');
+            int leftBracketLocation = s.indexOf('(');
+            int rightBracketLocation = s.indexOf(')');
+            if (tagLocation == -1 | leftBracketLocation == -1 || rightBracketLocation == -1
+                    && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
+                System.out.println("Your query isn't accepted");
+                System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
+                System.out.println("Example: "
+                        + "android.app.Notification.Builder#addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
+                ;
+                return new ArrayList<Query>();
+            } else {
+                String fullyQualifiedName = s.substring(0, tagLocation);
+                String method = s.substring(tagLocation + 1, leftBracketLocation);
+                String args = s.substring(leftBracketLocation + 1, rightBracketLocation);
+                ArrayList<String> arguments = new ArrayList<String>();
+                if (!args.equals("")) { // handle if no arguments
+                    String[] arr = args.split(",");
+                    for (int i = 0; i < arr.length; i++) {
+                        arguments.add(arr[i]);
+                    }
+                }
+                query.setFullyQualifiedName(fullyQualifiedName);
+                query.setMethod(method);
+                query.setArguments(arguments);
+                queries.add(query);
+                int andLocation = s.indexOf('&');
+                if (andLocation == -1) {
+                    s = "";
+                } else {
+                    s = s.substring(andLocation + 1);
+                }
+            }
+        }
+
+        return queries;
     }
 
     private static Query parseQuery(String s) {
@@ -418,7 +448,6 @@ public class App {
         }
 
     }
-
 
     /**
      * Convert github html url to download url input:
