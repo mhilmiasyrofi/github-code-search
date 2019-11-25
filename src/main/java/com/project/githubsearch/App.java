@@ -30,6 +30,7 @@ import java.util.stream.Stream;
 import com.github.kevinsawicki.http.HttpRequest;
 import com.project.githubsearch.model.MavenPackage;
 import com.project.githubsearch.model.Query;
+import com.project.githubsearch.model.ResolvedFile;
 import com.project.githubsearch.model.Response;
 import com.project.githubsearch.model.SynchronizedData;
 import com.project.githubsearch.model.SynchronizedFeeder;
@@ -102,11 +103,19 @@ public class App {
         if (queries.size() > 0) {
             printQuery(queries);
             initUniqueFolderToSaveData(queries);
-            processQuery(queries);
+            ArrayList<ResolvedFile> resolvedFiles = processQuery(queries);
+            for (int i = 0; i < resolvedFiles.size(); i++) {
+                System.out.println();
+                System.out.println("URL: " + resolvedFiles.get(i).getUrl());
+                System.out.println("Line: " + resolvedFiles.get(i).getLine());
+                System.out.println("Column: " + resolvedFiles.get(i).getColumn());
+            }
         }
     }
 
-    private static void processQuery(ArrayList<Query> queries) {
+    private static ArrayList<ResolvedFile> processQuery(ArrayList<Query> queries) {
+        ArrayList<ResolvedFile> resolvedFiles = new ArrayList<ResolvedFile>();
+        
         String query = prepareQuery(queries);
 
         int lower_bound, upper_bound, page, per_page_limit;
@@ -146,8 +155,8 @@ public class App {
                 }
             }
 
-            while (!data.isEmpty()) {
-                if (data.size() < 5) {
+            while (!data.isEmpty() && resolvedFiles.size() < 5) {
+                if (data.size() == 1 && resolvedFiles.isEmpty()) {
                     response = handleGithubRequestWithUrl(nextUrlRequest);
                     item = response.getItem();
                     nextUrlRequest = response.getNextUrlRequest();
@@ -160,8 +169,10 @@ public class App {
                 urls.add(htmlUrl);
                 isDownloaded = downloadFile(htmlUrl, id);
                 if (isDownloaded) {
-                    isResolved = resolveFile(id, queries, combinedTypeSolver);
-                    if (isResolved) {
+                    ResolvedFile resolvedFile = resolveFile(id, queries, combinedTypeSolver);
+                    if (!resolvedFile.getUrl().equals("")) {
+                        isResolved = true;
+                        resolvedFiles.add(resolvedFile);
                         System.out.println("File: " + urls.get(id));
                     }
                 }
@@ -169,9 +180,11 @@ public class App {
             }
         }
 
+        return resolvedFiles;
+
     }
 
-    private static boolean downloadFile(String htmlUrl, int fileId) {
+    private static boolean downloadFile(String htmlUrl, int fileId){
         // convert html url to downloadable url
         // based on my own analysis
         String downloadableUrl = convertHTMLUrlToDownloadUrl(htmlUrl);
@@ -209,10 +222,12 @@ public class App {
         return finished;
     }
 
-    private static boolean resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
+    private static ResolvedFile resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
         String pathFile = new String(DATA_LOCATION + "files/" + fileId + ".txt");
 
         File file = new File(pathFile);
+
+        ResolvedFile resolvedFile = new ResolvedFile("", -1, -1);
 
         try {
             System.out.println();
@@ -267,6 +282,9 @@ public class App {
                             if (isArgumentTypeMatch
                                     && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
+                                resolvedFile.setUrl(pathFile);
+                                resolvedFile.setLine(mce.getBegin().get().line);
+                                resolvedFile.setColumn(mce.getBegin().get().column);
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);
@@ -299,7 +317,6 @@ public class App {
 
             if (isSuccess) {
                 System.out.println("SUCCESS");
-                return true;
             }
 
         } catch (ParseProblemException parseProblemException) {
@@ -310,7 +327,7 @@ public class App {
             System.out.println("IO Exception in Type Resolution");
         }
 
-        return false;
+        return resolvedFile;
 
     }
 
