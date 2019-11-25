@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -107,10 +108,42 @@ public class App {
             for (int i = 0; i < resolvedFiles.size(); i++) {
                 System.out.println();
                 System.out.println("URL: " + resolvedFiles.get(i).getUrl());
+                System.out.println("Path to File: " + resolvedFiles.get(i).getPathFile());
                 System.out.println("Line: " + resolvedFiles.get(i).getLine());
                 System.out.println("Column: " + resolvedFiles.get(i).getColumn());
+                System.out.println("=== Snippet Codes ===");
+                ArrayList<String> codes = getSnippetCode(resolvedFiles.get(i).getPathFile(), resolvedFiles.get(i).getLine());
+                for (int j = 0; j < codes.size(); j++) {
+                    System.out.println(codes.get(j));
+                }
             }
         }
+    }
+
+    private static ArrayList<String> getSnippetCode(String pathFile, int desiredLine) {
+        ArrayList<String> codes = new ArrayList<String>();
+
+        BufferedReader reader;
+        int i = 0;
+        try {
+            reader = new BufferedReader(new FileReader(pathFile));
+            String line = reader.readLine();
+            while (line != null) {
+                i++;
+                // System.out.println(line);
+
+                if (i < (desiredLine + 5) && i > (desiredLine - 5)) {
+                    codes.add(line);
+                }
+                // read next line
+                line = reader.readLine();
+            }
+            reader.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return codes;
     }
 
     private static ArrayList<ResolvedFile> processQuery(ArrayList<Query> queries) {
@@ -155,7 +188,7 @@ public class App {
                 }
             }
 
-            while (!data.isEmpty() && resolvedFiles.size() < 5) {
+            while (!data.isEmpty() && resolvedFiles.size() < 1) {
                 if (data.size() == 1 && resolvedFiles.isEmpty()) {
                     response = handleGithubRequestWithUrl(nextUrlRequest);
                     item = response.getItem();
@@ -169,7 +202,7 @@ public class App {
                 urls.add(htmlUrl);
                 isDownloaded = downloadFile(htmlUrl, id);
                 if (isDownloaded) {
-                    ResolvedFile resolvedFile = resolveFile(id, queries, combinedTypeSolver);
+                    ResolvedFile resolvedFile = resolveFile(id, htmlUrl, queries, combinedTypeSolver);
                     if (!resolvedFile.getUrl().equals("")) {
                         isResolved = true;
                         resolvedFiles.add(resolvedFile);
@@ -222,12 +255,12 @@ public class App {
         return finished;
     }
 
-    private static ResolvedFile resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
+    private static ResolvedFile resolveFile(int fileId, String htmlUrl, ArrayList<Query> queries, CombinedTypeSolver solver) {
         String pathFile = new String(DATA_LOCATION + "files/" + fileId + ".txt");
 
         File file = new File(pathFile);
 
-        ResolvedFile resolvedFile = new ResolvedFile("", -1, -1);
+        ResolvedFile resolvedFile = new ResolvedFile("", "", -1, -1);
 
         try {
             System.out.println();
@@ -282,7 +315,8 @@ public class App {
                             if (isArgumentTypeMatch
                                     && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
-                                resolvedFile.setUrl(pathFile);
+                                resolvedFile.setUrl(htmlUrl);
+                                resolvedFile.setPathFile(pathFile);
                                 resolvedFile.setLine(mce.getBegin().get().line);
                                 resolvedFile.setColumn(mce.getBegin().get().column);
                             }
@@ -398,38 +432,6 @@ public class App {
         }
 
         return queries;
-    }
-
-    private static Query parseQuery(String s) {
-        Query query = new Query();
-
-        s = s.replace(" ", "");
-        int tagLocation = s.indexOf('#');
-        int leftBracketLocation = s.indexOf('(');
-        int rightBracketLocation = s.indexOf(')');
-        if (tagLocation == -1 | leftBracketLocation == -1 || rightBracketLocation == -1
-                && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
-            System.out.println("Your query isn't accepted");
-            System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
-            System.out.println("Example: "
-                    + "android.app.Notification.Builder#addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
-            return query;
-        } else {
-            String fullyQualifiedName = s.substring(0, tagLocation);
-            String method = s.substring(tagLocation + 1, leftBracketLocation);
-            String args = s.substring(leftBracketLocation + 1, rightBracketLocation);
-            ArrayList<String> arguments = new ArrayList<String>();
-            if (!args.equals("")) { // handle if no arguments
-                String[] arr = args.split(",");
-                for (int i = 0; i < arr.length; i++) {
-                    arguments.add(arr[i]);
-                }
-            }
-            query.setFullyQualifiedName(fullyQualifiedName);
-            query.setMethod(method);
-            query.setArguments(arguments);
-        }
-        return query;
     }
 
     private static void initUniqueFolderToSaveData(ArrayList<Query> queries) {

@@ -2,11 +2,13 @@ package com.project.githubsearch.model;
 
 public class ResolvedFile {
     private String url;
+    private String pathFile;
     private int line;
     private int column;
 
-    public ResolvedFile(String url, int line, int column) {
+    public ResolvedFile(String url, String pathFile, int line, int column) {
         this.url = url;
+        this.pathFile = pathFile;
         this.line = line;
         this.column = column;
     }
@@ -16,6 +18,13 @@ public class ResolvedFile {
      */
     public String getUrl() {
         return url;
+    }
+
+    /**
+     * @return the pathFile
+     */
+    public String getPathFile() {
+        return pathFile;
     }
 
     /**
@@ -37,6 +46,13 @@ public class ResolvedFile {
      */
     public void setUrl(String url) {
         this.url = url;
+    }
+
+    /**
+     * @param pathFile the pathFile to set
+     */
+    public void setPathFile(String pathFile) {
+        this.pathFile = pathFile;
     }
 
     /**
