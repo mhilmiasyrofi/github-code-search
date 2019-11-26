@@ -31,10 +31,12 @@ import java.util.stream.Stream;
 import com.github.kevinsawicki.http.HttpRequest;
 import com.project.githubsearch.model.MavenPackage;
 import com.project.githubsearch.model.Query;
+import com.project.githubsearch.model.ResolvedData;
 import com.project.githubsearch.model.ResolvedFile;
 import com.project.githubsearch.model.Response;
 import com.project.githubsearch.model.SynchronizedData;
 import com.project.githubsearch.model.SynchronizedFeeder;
+import com.project.githubsearch.model.SynchronizedTypeSolver;
 import com.project.githubsearch.model.GithubToken;
 import com.project.githubsearch.utils.DirExplorer;
 
@@ -64,6 +66,7 @@ public class App {
     // run multiple token
     // please make sure that the number of thread is equal with the number of tokens
     private static final int NUMBER_THREADS = 3;
+    private static final int NUMBER_CORE = 4;
 
     // parameter for the request
     private static final String PARAM_QUERY = "q"; //$NON-NLS-1$
@@ -88,12 +91,14 @@ public class App {
     // folder location to save the downloaded files and jars
     private static String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
-    private static final String ANDROID_JAR_LOCATION = "src/main/java/com/project/githubsearch/android/";
 
     private static final String endpoint = "https://api.github.com/search/code";
 
     private static SynchronizedData synchronizedData = new SynchronizedData();
     private static SynchronizedFeeder synchronizedFeeder = new SynchronizedFeeder();
+    private static ResolvedData resolvedData = new ResolvedData();
+    private static SynchronizedTypeSolver synchronizedTypeSolver = new SynchronizedTypeSolver();
+
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -109,10 +114,9 @@ public class App {
                 System.out.println();
                 System.out.println("URL: " + resolvedFiles.get(i).getUrl());
                 System.out.println("Path to File: " + resolvedFiles.get(i).getPathFile());
-                System.out.println("Line: " + resolvedFiles.get(i).getLine());
-                System.out.println("Column: " + resolvedFiles.get(i).getColumn());
+                System.out.println("Line: " + resolvedFiles.get(i).getLines());
                 System.out.println("=== Snippet Codes ===");
-                ArrayList<String> codes = getSnippetCode(resolvedFiles.get(i).getPathFile(), resolvedFiles.get(i).getLine());
+                ArrayList<String> codes = getSnippetCode(resolvedFiles.get(i).getPathFile(), resolvedFiles.get(i).getLines());
                 for (int j = 0; j < codes.size(); j++) {
                     System.out.println(codes.get(j));
                 }
@@ -120,8 +124,25 @@ public class App {
         }
     }
 
-    private static ArrayList<String> getSnippetCode(String pathFile, int desiredLine) {
+    private static ArrayList<String> getSnippetCode(String pathFile, ArrayList<Integer> lines) {
         ArrayList<String> codes = new ArrayList<String>();
+
+        int min, max, length;
+        length = lines.size();
+        if (length == 1) {
+            min = max = lines.get(0).intValue();
+        } else {
+            min = lines.get(0).intValue();
+            max = lines.get(0).intValue();
+            for (int i = 1; i < length; i++) {
+                if ( lines.get(i).intValue() < min) {
+                    min = lines.get(i).intValue();
+                }
+                if ( lines.get(i).intValue() > max) {
+                    max = lines.get(i).intValue();
+                }
+            }
+        }
 
         BufferedReader reader;
         int i = 0;
@@ -132,7 +153,7 @@ public class App {
                 i++;
                 // System.out.println(line);
 
-                if (i < (desiredLine + 5) && i > (desiredLine - 5)) {
+                if (i < (max + 5) && i > (min - 5)) {
                     codes.add(line);
                 }
                 // read next line
@@ -171,25 +192,13 @@ public class App {
                 data.add(instance.getString("html_url"));
             }
 
+            
             int id = 0;
             boolean isDownloaded, isResolved;
             ArrayList<String> urls = new ArrayList<>();
-            CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver(new ReflectionTypeSolver(false),
-                    new JavaParserTypeSolver(new File("src/main/java")));
-
-            List<File> androidJars = findJarFiles(new File(ANDROID_JAR_LOCATION));
-            for (File jar : androidJars) {
-                try {
-                    combinedTypeSolver.add(JarTypeSolver.getJarTypeSolver(jar.getPath()));
-                } catch (IOException e) {
-                    System.out.println("Can't add the jar: " + jar);
-                    // TODO Auto-generated catch block
-                    // e.printStackTrace();
-                }
-            }
 
             while (!data.isEmpty() && resolvedFiles.size() < 1) {
-                if (data.size() == 1 && resolvedFiles.isEmpty()) {
+                if (data.size() < (2 * NUMBER_CORE)) {
                     response = handleGithubRequestWithUrl(nextUrlRequest);
                     item = response.getItem();
                     nextUrlRequest = response.getNextUrlRequest();
@@ -198,24 +207,61 @@ public class App {
                         data.add(instance.getString("html_url"));
                     }
                 }
-                String htmlUrl = data.remove();
-                urls.add(htmlUrl);
-                isDownloaded = downloadFile(htmlUrl, id);
-                if (isDownloaded) {
-                    ResolvedFile resolvedFile = resolveFile(id, queries, combinedTypeSolver);
-                    if (!resolvedFile.getUrl().equals("")) {
-                        isResolved = true;
-                        resolvedFile.setUrl(htmlUrl);
-                        resolvedFiles.add(resolvedFile);
-                        System.out.println("File: " + urls.get(id));
-                    }
+
+
+                // System.out.println("=====================");
+                // System.out.println("Multi-threading start");
+                // System.out.println("=====================");
+
+                ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
+
+
+                for (int i = 0; i < NUMBER_CORE; i++) {
+                    String htmlUrl = data.remove();
+                    urls.add(htmlUrl);
+                    id = id + 1;
+                    Runnable worker = new RunnableResolver(id, htmlUrl, queries);
+                    executor.execute(worker);
                 }
-                id = id + 1;
+
+                executor.shutdown();
+                // Wait until all threads are finish
+                while (!executor.isTerminated()) {
+                }
+
+                // System.out.println("===================");
+                // System.out.println("Multi-threading end");
+                // System.out.println("===================");
+
             }
         }
 
         return resolvedFiles;
 
+    }
+
+    public static class RunnableResolver implements Runnable {
+        private final int id;
+        private final String htmlUrl;
+        private final ArrayList<Query> queries;
+
+        RunnableResolver(int id, String htmlUrl, ArrayList<Query> queries) {
+            this.id = id;
+            this.htmlUrl = htmlUrl;
+            this.queries = queries;
+        }
+
+        @Override
+        public void run() {
+            boolean isDownloaded = downloadFile(htmlUrl, id);
+            if (isDownloaded) {
+                ResolvedFile resolvedFile = resolveFile(id, queries);
+                if (!resolvedFile.getUrl().equals("")) {
+                    resolvedFile.setUrl(htmlUrl);
+                    resolvedData.add(resolvedFile);
+                }
+            }
+        }
     }
 
     private static boolean downloadFile(String htmlUrl, int fileId){
@@ -256,31 +302,29 @@ public class App {
         return finished;
     }
 
-    private static ResolvedFile resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
+    private static ResolvedFile resolveFile(int fileId, ArrayList<Query> queries) {
         String pathFile = new String(DATA_LOCATION + "files/" + fileId + ".txt");
 
         File file = new File(pathFile);
 
         ArrayList<String> snippetCodes = new ArrayList<String>();
+        ArrayList<Integer> lines = new ArrayList<Integer>();
 
-        ResolvedFile resolvedFile = new ResolvedFile("", "", -1, -1, snippetCodes);
+        ResolvedFile resolvedFile = new ResolvedFile(queries, "", "", lines, snippetCodes);
+        // System.out.println();
         try {
-            System.out.println();
-            printSign("=", file.toString().length() + 6);
-            System.out.println("File: " + file);
-            printSign("=", file.toString().length() + 6);
-
             List<String> addedJars = getNeededJars(file);
             for (int i = 0; i < addedJars.size(); i++) {
                 try {
                     TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
-                    solver.add(jarTypeSolver);
+                    synchronizedTypeSolver.add(jarTypeSolver);
                 } catch (Exception e) {
-                    System.out.println("Package corrupt!");
-                    System.out.println("Corrupted Jars: " + addedJars.get(i));
+                    System.out.println("=== Package corrupt! ===");
+                    System.out.println("Corrupted jars: " + addedJars.get(i));
+                    System.out.println("File location: " + file.toString());
                 }
             }
-            StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(solver));
+            StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(synchronizedTypeSolver.getTypeSolver()));
             CompilationUnit cu;
             cu = StaticJavaParser.parse(file);
 
@@ -317,10 +361,7 @@ public class App {
                             if (isArgumentTypeMatch
                                     && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
-                                resolvedFile.setPathFile(pathFile);
-                                resolvedFile.setLine(mce.getBegin().get().line);
-                                resolvedFile.setColumn(mce.getBegin().get().column);
-                                resolvedFile.setCodes(getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLine()));
+                                resolvedFile.getLines().add(mce.getBegin().get().line);
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);
@@ -329,9 +370,14 @@ public class App {
                 });
             }
 
+
             boolean isSuccess = true;
+            // System.out.println();
+            // printSign("=", file.toString().length() + 6);
+            // System.out.println("File: " + file);
+            // printSign("=", file.toString().length() + 6);
             for (int i = 0; i < queries.size(); i++) {
-                System.out.println("\nQuery " + (i + 1) + ": " + queries.get(i));
+                System.out.println("Query " + (i + 1) + ": " + queries.get(i));
                 if (isMethodMatch.get(i)) {
                     if (isResolved.get(i)) {
                         if (isResolvedAndParameterMatch.get(i)) {
@@ -352,15 +398,21 @@ public class App {
             }
 
             if (isSuccess) {
-                System.out.println("SUCCESS");
+                resolvedFile.setPathFile(pathFile);
+                resolvedFile.setCodes(getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLines()));
+                System.out.println("=== SUCCESS ===");
             }
+            System.out.println("File location: " + file.toString());
 
         } catch (ParseProblemException parseProblemException) {
-            System.out.println("Parse Problem Exception in Type Resolution");
+            System.out.println("=== Parse Problem Exception in Type Resolution ===");
+            System.out.println("File location: " + pathFile);
         } catch (RuntimeException runtimeException) {
-            System.out.println("Runtime Exception in Type Resolution");
+            System.out.println("=== Runtime Exception in Type Resolution ===");
+            System.out.println("File location: " + pathFile);
         } catch (IOException io) {
-            System.out.println("IO Exception in Type Resolution");
+            System.out.println("=== IO Exception in Type Resolution ===");
+            System.out.println("File location: " + pathFile);
         }
 
         return resolvedFile;
@@ -394,21 +446,20 @@ public class App {
     private static ArrayList<Query> parseQueries(String s) {
         ArrayList<Query> queries = new ArrayList<Query>();
 
-        Query query = new Query();
-
+        
         s = s.replace(" ", "");
         while (!s.equals("")) {
             int tagLocation = s.indexOf('#');
             int leftBracketLocation = s.indexOf('(');
             int rightBracketLocation = s.indexOf(')');
             if (tagLocation == -1 | leftBracketLocation == -1 || rightBracketLocation == -1
-                    && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
+            && tagLocation < leftBracketLocation && leftBracketLocation < rightBracketLocation) {
                 System.out.println("Your query isn't accepted");
                 System.out.println("Query Format: " + "method(argument_1, argument_2, ... , argument_n)");
                 System.out.println("Example: "
                         + "android.app.Notification.Builder#addAction(int, java.lang.CharSequence, android.app.PendingIntent)");
-                ;
-                return new ArrayList<Query>();
+                        ;
+                        return new ArrayList<Query>();
             } else {
                 String fullyQualifiedName = s.substring(0, tagLocation);
                 String method = s.substring(tagLocation + 1, leftBracketLocation);
@@ -420,6 +471,7 @@ public class App {
                         arguments.add(arr[i]);
                     }
                 }
+                Query query = new Query();
                 query.setFullyQualifiedName(fullyQualifiedName);
                 query.setMethod(method);
                 query.setArguments(arguments);
@@ -639,15 +691,6 @@ public class App {
             System.out.print(s);
         }
         System.out.println();
-    }
-
-    private static List<File> findJarFiles(File src) {
-        List<File> files = new LinkedList<File>();
-        new DirExplorer((level, path, file) -> path.endsWith(".jar"), (level, path, file) -> {
-            files.add(file);
-        }).explore(src);
-
-        return files;
     }
 
     private static List<String> getNeededJars(File file) {
