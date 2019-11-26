@@ -202,9 +202,10 @@ public class App {
                 urls.add(htmlUrl);
                 isDownloaded = downloadFile(htmlUrl, id);
                 if (isDownloaded) {
-                    ResolvedFile resolvedFile = resolveFile(id, htmlUrl, queries, combinedTypeSolver);
+                    ResolvedFile resolvedFile = resolveFile(id, queries, combinedTypeSolver);
                     if (!resolvedFile.getUrl().equals("")) {
                         isResolved = true;
+                        resolvedFile.setUrl(htmlUrl);
                         resolvedFiles.add(resolvedFile);
                         System.out.println("File: " + urls.get(id));
                     }
@@ -255,13 +256,14 @@ public class App {
         return finished;
     }
 
-    private static ResolvedFile resolveFile(int fileId, String htmlUrl, ArrayList<Query> queries, CombinedTypeSolver solver) {
+    private static ResolvedFile resolveFile(int fileId, ArrayList<Query> queries, CombinedTypeSolver solver) {
         String pathFile = new String(DATA_LOCATION + "files/" + fileId + ".txt");
 
         File file = new File(pathFile);
 
-        ResolvedFile resolvedFile = new ResolvedFile("", "", -1, -1);
+        ArrayList<String> snippetCodes = new ArrayList<String>();
 
+        ResolvedFile resolvedFile = new ResolvedFile("", "", -1, -1, snippetCodes);
         try {
             System.out.println();
             printSign("=", file.toString().length() + 6);
@@ -315,10 +317,10 @@ public class App {
                             if (isArgumentTypeMatch
                                     && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
-                                resolvedFile.setUrl(htmlUrl);
                                 resolvedFile.setPathFile(pathFile);
                                 resolvedFile.setLine(mce.getBegin().get().line);
                                 resolvedFile.setColumn(mce.getBegin().get().column);
+                                resolvedFile.setCodes(getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLine()));
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);

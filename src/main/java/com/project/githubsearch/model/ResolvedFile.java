@@ -1,16 +1,20 @@
 package com.project.githubsearch.model;
 
+import java.util.ArrayList;
+
 public class ResolvedFile {
     private String url;
     private String pathFile;
     private int line;
     private int column;
+    private ArrayList<String> codes = new ArrayList<String>();
 
-    public ResolvedFile(String url, String pathFile, int line, int column) {
+    public ResolvedFile(String url, String pathFile, int line, int column, ArrayList<String> codes) {
         this.url = url;
         this.pathFile = pathFile;
         this.line = line;
         this.column = column;
+        this.codes = codes;
     }
 
     /**
@@ -42,6 +46,13 @@ public class ResolvedFile {
     }
 
     /**
+     * @return the codes
+     */
+    public ArrayList<String> getCodes() {
+        return codes;
+    }
+
+    /**
      * @param url the url to set
      */
     public void setUrl(String url) {
@@ -68,4 +79,12 @@ public class ResolvedFile {
     public void setColumn(int column) {
         this.column = column;
     }
+
+    /**
+     * @param codes the codes to set
+     */
+    public void setCodes(ArrayList<String> codes) {
+        this.codes = codes;
+    }
+
 }
