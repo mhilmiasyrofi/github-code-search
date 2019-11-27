@@ -205,6 +205,8 @@ public class App {
                     String htmlUrl = data.remove();
                     urls.add(htmlUrl);
                     id = id + 1;
+                    System.out.println("id: " + id);
+                    System.out.println("html url: " + htmlUrl);
                     Runnable worker = new RunnableResolver(id, htmlUrl, queries);
                     executor.execute(worker);
                 }
@@ -327,11 +329,14 @@ public class App {
                 isResolved.add(false);
                 isResolvedAndParameterMatch.add(false);
             }
-
+            
+            
             for (int i = 0; i < queries.size(); i++) {
                 final int index = i;
                 Query query = queries.get(index);
-                cu.findAll(MethodCallExpr.class).forEach(mce -> {
+                ArrayList<MethodCallExpr> methodCallExprs = (ArrayList<MethodCallExpr>) cu.findAll(MethodCallExpr.class);
+                for (int j = 0; j < methodCallExprs.size(); j++) {
+                    MethodCallExpr mce = methodCallExprs.get(j);
                     if (mce.getName().toString().equals(query.getMethod())
                             && mce.getArguments().size() == query.getArguments().size()) {
                         isMethodMatch.set(index, true);
@@ -341,9 +346,9 @@ public class App {
                                     + resolvedMethodDeclaration.getClassName();
                             isResolved.set(index, true);
                             boolean isArgumentTypeMatch = true;
-                            for (int j = 0; j < resolvedMethodDeclaration.getNumberOfParams(); j++) {
-                                if (!query.getArguments().get(j)
-                                        .equals(resolvedMethodDeclaration.getParam(j).describeType())) {
+                            for (int k = 0; k < resolvedMethodDeclaration.getNumberOfParams(); k++) {
+                                if (!query.getArguments().get(k)
+                                        .equals(resolvedMethodDeclaration.getParam(k).describeType())) {
                                     isArgumentTypeMatch = false;
                                     break;
                                 }
@@ -352,12 +357,13 @@ public class App {
                                     && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
                                 lines.add(mce.getBegin().get().line);
+                                break;
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);
                         }
                     }
-                });
+                }
             }
 
 
@@ -537,7 +543,7 @@ public class App {
             upper_bound++;
             lower_bound--;
             String size = lower_bound + ".." + upper_bound; // lower_bound < size < upper_bound
-            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size
+            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+size:" + size
                     + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
         }
 
@@ -631,7 +637,7 @@ public class App {
         String url;
         Response response = new Response();
 
-        url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+extension:java+size:" + size + "&"
+        url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+size:" + size + "&"
                 + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
         response = handleGithubRequestWithUrl(url);
 
