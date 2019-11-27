@@ -238,8 +238,16 @@ public class App {
             boolean isDownloaded = downloadFile(htmlUrl, id);
             if (isDownloaded) {
                 ResolvedFile resolvedFile = resolveFile(id, queries);
-                if (!resolvedFile.getUrl().equals("")) {
+                if (!resolvedFile.getPathFile().equals("")) {
                     resolvedFile.setUrl(htmlUrl);
+                    System.out.println("URL: " + resolvedFile.getUrl());
+                    System.out.println("Path to File: " + resolvedFile.getPathFile());
+                    System.out.println("Line: " + resolvedFile.getLines());
+                    System.out.println("Snippet Codes: ");
+                    ArrayList<String> codes = getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLines());
+                    for (int j = 0; j < codes.size(); j++) {
+                        System.out.println(codes.get(j));
+                    }
                     resolvedData.add(resolvedFile);
                 }
             }
@@ -381,8 +389,9 @@ public class App {
                 resolvedFile.setLines(lines);
                 resolvedFile.setCodes(getSnippetCode(pathFile, lines));
                 System.out.println("=== SUCCESS ===");
+            } else {
+                System.out.println("File location: " + file.toString());
             }
-            System.out.println("File location: " + file.toString());
 
         } catch (ParseProblemException parseProblemException) {
             System.out.println("=== Parse Problem Exception in Type Resolution ===");
