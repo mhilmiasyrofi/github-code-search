@@ -3,20 +3,15 @@ package com.project.githubsearch;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.Writer;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,8 +20,6 @@ import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.github.kevinsawicki.http.HttpRequest;
 import com.project.githubsearch.model.MavenPackage;
@@ -38,7 +31,6 @@ import com.project.githubsearch.model.SynchronizedData;
 import com.project.githubsearch.model.SynchronizedFeeder;
 import com.project.githubsearch.model.SynchronizedTypeSolver;
 import com.project.githubsearch.model.GithubToken;
-import com.project.githubsearch.utils.DirExplorer;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -85,9 +77,6 @@ public class App {
     private static final int ABUSE_RATE_LIMITS = 403;
     private static final int UNPROCESSABLE_ENTITY = 422;
 
-    private static final long INFINITY = -1;
-    private static long MAX_DATA = INFINITY;
-
     // folder location to save the downloaded files and jars
     private static String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
     private static final String JARS_LOCATION = "src/main/java/com/project/githubsearch/jars/";
@@ -109,14 +98,14 @@ public class App {
         if (queries.size() > 0) {
             printQuery(queries);
             initUniqueFolderToSaveData(queries);
-            ArrayList<ResolvedFile> resolvedFiles = processQuery(queries);
-            for (int i = 0; i < resolvedFiles.size(); i++) {
+            processQuery(queries);
+            for (int i = 0; i < resolvedData.getResolvedFiles().size(); i++) {
                 System.out.println();
-                System.out.println("URL: " + resolvedFiles.get(i).getUrl());
-                System.out.println("Path to File: " + resolvedFiles.get(i).getPathFile());
-                System.out.println("Line: " + resolvedFiles.get(i).getLines());
+                System.out.println("URL: " + resolvedData.getResolvedFiles().get(i).getUrl());
+                System.out.println("Path to File: " + resolvedData.getResolvedFiles().get(i).getPathFile());
+                System.out.println("Line: " + resolvedData.getResolvedFiles().get(i).getLines());
                 System.out.println("=== Snippet Codes ===");
-                ArrayList<String> codes = getSnippetCode(resolvedFiles.get(i).getPathFile(), resolvedFiles.get(i).getLines());
+                ArrayList<String> codes = getSnippetCode(resolvedData.getResolvedFiles().get(i).getPathFile(), resolvedData.getResolvedFiles().get(i).getLines());
                 for (int j = 0; j < codes.size(); j++) {
                     System.out.println(codes.get(j));
                 }
@@ -167,8 +156,7 @@ public class App {
         return codes;
     }
 
-    private static ArrayList<ResolvedFile> processQuery(ArrayList<Query> queries) {
-        ArrayList<ResolvedFile> resolvedFiles = new ArrayList<ResolvedFile>();
+    private static void processQuery(ArrayList<Query> queries) {
         
         String query = prepareQuery(queries);
 
@@ -194,10 +182,9 @@ public class App {
 
             
             int id = 0;
-            boolean isDownloaded, isResolved;
             ArrayList<String> urls = new ArrayList<>();
 
-            while (!data.isEmpty() && resolvedFiles.size() < 1) {
+            while (resolvedData.getResolvedFiles().size() < 5) {
                 if (data.size() < (2 * NUMBER_CORE)) {
                     response = handleGithubRequestWithUrl(nextUrlRequest);
                     item = response.getItem();
@@ -208,13 +195,11 @@ public class App {
                     }
                 }
 
-
                 // System.out.println("=====================");
                 // System.out.println("Multi-threading start");
                 // System.out.println("=====================");
 
                 ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
-
 
                 for (int i = 0; i < NUMBER_CORE; i++) {
                     String htmlUrl = data.remove();
@@ -226,8 +211,7 @@ public class App {
 
                 executor.shutdown();
                 // Wait until all threads are finish
-                while (!executor.isTerminated()) {
-                }
+                while (!executor.isTerminated()) {}
 
                 // System.out.println("===================");
                 // System.out.println("Multi-threading end");
@@ -235,8 +219,6 @@ public class App {
 
             }
         }
-
-        return resolvedFiles;
 
     }
 
@@ -361,7 +343,7 @@ public class App {
                             if (isArgumentTypeMatch
                                     && fullyQualifiedName.equals(queries.get(index).getFullyQualifiedName())) {
                                 isResolvedAndParameterMatch.set(index, true);
-                                resolvedFile.getLines().add(mce.getBegin().get().line);
+                                lines.add(mce.getBegin().get().line);
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
                             isResolved.set(index, false);
@@ -372,10 +354,7 @@ public class App {
 
 
             boolean isSuccess = true;
-            // System.out.println();
-            // printSign("=", file.toString().length() + 6);
-            // System.out.println("File: " + file);
-            // printSign("=", file.toString().length() + 6);
+            
             for (int i = 0; i < queries.size(); i++) {
                 System.out.println("Query " + (i + 1) + ": " + queries.get(i));
                 if (isMethodMatch.get(i)) {
@@ -399,7 +378,8 @@ public class App {
 
             if (isSuccess) {
                 resolvedFile.setPathFile(pathFile);
-                resolvedFile.setCodes(getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLines()));
+                resolvedFile.setLines(lines);
+                resolvedFile.setCodes(getSnippetCode(pathFile, lines));
                 System.out.println("=== SUCCESS ===");
             }
             System.out.println("File location: " + file.toString());
@@ -420,18 +400,13 @@ public class App {
     }
 
     private static String prepareQuery(ArrayList<Query> queries) {
-        String stringQuery = "";
+        String queriesAsString = "";
         for (int i = 0; i < queries.size(); i++) {
-            Query query = queries.get(i);
-            stringQuery += query.getMethod();
-            for (int j = 0; j < query.getArguments().size(); j++) {
-                stringQuery += " " + query.getArguments().get(j);
-            }
-            if (i != queries.size() - 1)
-                stringQuery += " ";
+            queriesAsString += queries.get(i).toStringRequest();
+            if (i != (queries.size() - 1)) queriesAsString += " ";
         }
 
-        return stringQuery;
+        return queriesAsString;
     }
 
     private static void printQuery(ArrayList<Query> queries) {
@@ -686,12 +661,6 @@ public class App {
         return next;
     }
 
-    private static void printSign(String s, int x) {
-        for (int i = 0; i < x; i++) {
-            System.out.print(s);
-        }
-        System.out.println();
-    }
 
     private static List<String> getNeededJars(File file) {
         List<String> jarsPath = new ArrayList<String>();
