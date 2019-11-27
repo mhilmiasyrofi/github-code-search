@@ -12,6 +12,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -88,6 +90,9 @@ public class App {
     private static ResolvedData resolvedData = new ResolvedData();
     private static SynchronizedTypeSolver synchronizedTypeSolver = new SynchronizedTypeSolver();
 
+    private static Instant start;
+    private static Instant currentTime;
+
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -98,18 +103,19 @@ public class App {
         if (queries.size() > 0) {
             printQuery(queries);
             initUniqueFolderToSaveData(queries);
+            start = Instant.now();
             processQuery(queries);
-            for (int i = 0; i < resolvedData.getResolvedFiles().size(); i++) {
-                System.out.println();
-                System.out.println("URL: " + resolvedData.getResolvedFiles().get(i).getUrl());
-                System.out.println("Path to File: " + resolvedData.getResolvedFiles().get(i).getPathFile());
-                System.out.println("Line: " + resolvedData.getResolvedFiles().get(i).getLines());
-                System.out.println("=== Snippet Codes ===");
-                ArrayList<String> codes = getSnippetCode(resolvedData.getResolvedFiles().get(i).getPathFile(), resolvedData.getResolvedFiles().get(i).getLines());
-                for (int j = 0; j < codes.size(); j++) {
-                    System.out.println(codes.get(j));
-                }
-            }
+            // for (int i = 0; i < resolvedData.getResolvedFiles().size(); i++) {
+            //     System.out.println();
+            //     System.out.println("URL: " + resolvedData.getResolvedFiles().get(i).getUrl());
+            //     System.out.println("Path to File: " + resolvedData.getResolvedFiles().get(i).getPathFile());
+            //     System.out.println("Line: " + resolvedData.getResolvedFiles().get(i).getLines());
+            //     System.out.println("=== Snippet Codes ===");
+            //     ArrayList<String> codes = getSnippetCode(resolvedData.getResolvedFiles().get(i).getPathFile(), resolvedData.getResolvedFiles().get(i).getLines());
+            //     for (int j = 0; j < codes.size(); j++) {
+            //         System.out.println(codes.get(j));
+            //     }
+            // }
         }
     }
 
@@ -184,7 +190,7 @@ public class App {
             int id = 0;
             ArrayList<String> urls = new ArrayList<>();
 
-            while (resolvedData.getResolvedFiles().size() < 5) {
+            while (resolvedData.getResolvedFiles().size() < 1) {
                 if (data.size() < (2 * NUMBER_CORE)) {
                     response = handleGithubRequestWithUrl(nextUrlRequest);
                     item = response.getItem();
@@ -241,6 +247,13 @@ public class App {
             if (isDownloaded) {
                 ResolvedFile resolvedFile = resolveFile(id, queries);
                 if (!resolvedFile.getPathFile().equals("")) {
+                    currentTime = Instant.now();
+                    long timeElapsed = Duration.between(start, currentTime).toMillis();
+                    long minutes = (timeElapsed / 1000) / 60;
+                    long seconds = (timeElapsed / 1000) % 60;
+                    long ms = (timeElapsed % 1000);
+                    System.out.println("Elapsed time from start: " + minutes + " minutes " + seconds
+                            + " seconds " + ms + "ms");
                     resolvedFile.setUrl(htmlUrl);
                     System.out.println("URL: " + resolvedFile.getUrl());
                     System.out.println("Path to File: " + resolvedFile.getPathFile());
@@ -311,9 +324,9 @@ public class App {
                     TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
                     synchronizedTypeSolver.add(jarTypeSolver);
                 } catch (Exception e) {
-                    System.out.println("=== Package corrupt! ===");
-                    System.out.println("Corrupted jars: " + addedJars.get(i));
-                    System.out.println("File location: " + file.toString());
+                    // System.out.println("=== Package corrupt! ===");
+                    // System.out.println("Corrupted jars: " + addedJars.get(i));
+                    // System.out.println("File location: " + file.toString());
                 }
             }
             StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(synchronizedTypeSolver.getTypeSolver()));
@@ -370,23 +383,22 @@ public class App {
             boolean isSuccess = true;
             
             for (int i = 0; i < queries.size(); i++) {
-                System.out.println("Query " + (i + 1) + ": " + queries.get(i));
+                // System.out.println("Query " + (i + 1) + ": " + queries.get(i));
                 if (isMethodMatch.get(i)) {
                     if (isResolved.get(i)) {
                         if (isResolvedAndParameterMatch.get(i)) {
-                            System.out.println("Resolved and match argument type");
+                            // System.out.println("Resolved and match argument type");
                         } else {
                             isSuccess = false;
-                            System.out.println(
-                                    "Resolved but argument type doesn't match :" + queries.get(i).getArguments());
+                            // System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
                         }
                     } else {
                         isSuccess = false;
-                        System.out.println("Can't resolve :" + queries.get(i).getMethod());
+                        // System.out.println("Can't resolve :" + queries.get(i).getMethod());
                     }
                 } else {
                     isSuccess = false;
-                    System.out.println("No method match :" + queries.get(i).getMethod());
+                    // System.out.println("No method match :" + queries.get(i).getMethod());
                 }
             }
 
