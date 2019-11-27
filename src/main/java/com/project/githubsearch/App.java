@@ -420,7 +420,6 @@ public class App {
 
     private static ArrayList<Query> parseQueries(String s) {
         ArrayList<Query> queries = new ArrayList<Query>();
-
         
         s = s.replace(" ", "");
         while (!s.equals("")) {
@@ -567,9 +566,11 @@ public class App {
                 response.setCode(responseCode);
                 JSONObject body = new JSONObject(request.body());
                 response.setTotalCount(body.getInt("total_count"));
-                response.setItem(body.getJSONArray("items"));
-                response.setUrlRequest(request.toString());
-                response.setNextUrlRequest(getNextLinkFromResponse(request.header("Link")));
+                if (body.getInt("total_count") > 0) {
+                    response.setItem(body.getJSONArray("items"));
+                    response.setUrlRequest(request.toString());
+                    response.setNextUrlRequest(getNextLinkFromResponse(request.header("Link")));
+                }
                 response_ok = true;
             } else if (responseCode == BAD_CREDENTIAL) {
                 System.out.println("Authorization problem");
