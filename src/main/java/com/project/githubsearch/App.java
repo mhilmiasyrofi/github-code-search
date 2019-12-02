@@ -60,7 +60,7 @@ public class App {
     // run multiple token
     // please make sure that the number of thread is equal with the number of tokens
     private static final int NUMBER_THREADS = 3;
-    private static final int NUMBER_CORE = 4;
+    private static final int NUMBER_CORE = 1;
 
     // parameter for the request
     private static final String PARAM_QUERY = "q"; //$NON-NLS-1$
@@ -78,6 +78,9 @@ public class App {
     private static final int RESPONSE_OK = 200;
     private static final int ABUSE_RATE_LIMITS = 403;
     private static final int UNPROCESSABLE_ENTITY = 422;
+    
+    // number of needed file to be resolved
+    private static final int MAX_RESULT = 1;
 
     // folder location to save the downloaded files and jars
     private static String DATA_LOCATION = "src/main/java/com/project/githubsearch/data/";
@@ -188,9 +191,8 @@ public class App {
 
             
             int id = 0;
-            ArrayList<String> urls = new ArrayList<>();
 
-            while (resolvedData.getResolvedFiles().size() < 1) {
+            while (resolvedData.getResolvedFiles().size() < MAX_RESULT) {
                 if (data.size() < (2 * NUMBER_CORE)) {
                     response = handleGithubRequestWithUrl(nextUrlRequest);
                     item = response.getItem();
@@ -202,24 +204,34 @@ public class App {
                 }
 
                 // System.out.println("=====================");
+                // System.out.println("Without multi-threading");
+                // System.out.println("=====================");
+                id = id + 1;
+                String htmlUrl = data.remove();
+                System.out.println();
+                System.out.println("ID: " + id);
+                System.out.println("File Url: " + htmlUrl);
+                downloadAndResolveFile(id, htmlUrl, queries);
+                
+
+                // System.out.println("=====================");
                 // System.out.println("Multi-threading start");
                 // System.out.println("=====================");
 
-                ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
+                // ExecutorService executor = Executors.newFixedThreadPool(NUMBER_THREADS);
 
-                for (int i = 0; i < NUMBER_CORE; i++) {
-                    String htmlUrl = data.remove();
-                    urls.add(htmlUrl);
-                    id = id + 1;
-                    System.out.println("id: " + id);
-                    System.out.println("html url: " + htmlUrl);
-                    Runnable worker = new RunnableResolver(id, htmlUrl, queries);
-                    executor.execute(worker);
-                }
+                // for (int i = 0; i < NUMBER_CORE; i++) {
+                //     String htmlUrl = data.remove();
+                //     id = id + 1;
+                //     System.out.println("id: " + id);
+                //     System.out.println("html url: " + htmlUrl);
+                //     Runnable worker = new RunnableResolver(id, htmlUrl, queries);
+                //     executor.execute(worker);
+                // }
 
-                executor.shutdown();
-                // Wait until all threads are finish
-                while (!executor.isTerminated()) {}
+                // executor.shutdown();
+                // // Wait until all threads are finish
+                // while (!executor.isTerminated()) {}
 
                 // System.out.println("===================");
                 // System.out.println("Multi-threading end");
@@ -228,6 +240,32 @@ public class App {
             }
         }
 
+    }
+
+    public static void downloadAndResolveFile (int id, String htmlUrl, ArrayList<Query> queries) {
+        boolean isDownloaded = downloadFile(htmlUrl, id);
+        if (isDownloaded) {
+            ResolvedFile resolvedFile = resolveFile(id, queries);
+            if (!resolvedFile.getPathFile().equals("")) {
+                currentTime = Instant.now();
+                long timeElapsed = Duration.between(start, currentTime).toMillis();
+                long minutes = (timeElapsed / 1000) / 60;
+                long seconds = (timeElapsed / 1000) % 60;
+                long ms = (timeElapsed % 1000);
+                System.out.println(
+                        "Elapsed time from start: " + minutes + " minutes " + seconds + " seconds " + ms + "ms");
+                resolvedFile.setUrl(htmlUrl);
+                System.out.println("URL: " + resolvedFile.getUrl());
+                System.out.println("Path to File: " + resolvedFile.getPathFile());
+                System.out.println("Line: " + resolvedFile.getLines());
+                System.out.println("Snippet Codes: ");
+                ArrayList<String> codes = getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLines());
+                for (int j = 0; j < codes.size(); j++) {
+                    System.out.println(codes.get(j));
+                }
+                resolvedData.add(resolvedFile);
+            }
+        }
     }
 
     public static class RunnableResolver implements Runnable {
@@ -243,29 +281,7 @@ public class App {
 
         @Override
         public void run() {
-            boolean isDownloaded = downloadFile(htmlUrl, id);
-            if (isDownloaded) {
-                ResolvedFile resolvedFile = resolveFile(id, queries);
-                if (!resolvedFile.getPathFile().equals("")) {
-                    currentTime = Instant.now();
-                    long timeElapsed = Duration.between(start, currentTime).toMillis();
-                    long minutes = (timeElapsed / 1000) / 60;
-                    long seconds = (timeElapsed / 1000) % 60;
-                    long ms = (timeElapsed % 1000);
-                    System.out.println("Elapsed time from start: " + minutes + " minutes " + seconds
-                            + " seconds " + ms + "ms");
-                    resolvedFile.setUrl(htmlUrl);
-                    System.out.println("URL: " + resolvedFile.getUrl());
-                    System.out.println("Path to File: " + resolvedFile.getPathFile());
-                    System.out.println("Line: " + resolvedFile.getLines());
-                    System.out.println("Snippet Codes: ");
-                    ArrayList<String> codes = getSnippetCode(resolvedFile.getPathFile(), resolvedFile.getLines());
-                    for (int j = 0; j < codes.size(); j++) {
-                        System.out.println(codes.get(j));
-                    }
-                    resolvedData.add(resolvedFile);
-                }
-            }
+            downloadAndResolveFile(id, htmlUrl, queries);
         }
     }
 
@@ -324,9 +340,10 @@ public class App {
                     TypeSolver jarTypeSolver = JarTypeSolver.getJarTypeSolver(addedJars.get(i));
                     synchronizedTypeSolver.add(jarTypeSolver);
                 } catch (Exception e) {
-                    // System.out.println("=== Package corrupt! ===");
-                    // System.out.println("Corrupted jars: " + addedJars.get(i));
-                    // System.out.println("File location: " + file.toString());
+                    System.out.println("=== Package corrupt! ===");
+                    System.out.println("Corrupted jars: " + addedJars.get(i));
+                    System.out.println("Please download the latest jar manually from maven repository!");
+                    System.out.println("File location: " + file.toString());
                 }
             }
             StaticJavaParser.getConfiguration().setSymbolResolver(new JavaSymbolSolver(synchronizedTypeSolver.getTypeSolver()));
@@ -353,6 +370,7 @@ public class App {
                     if (mce.getName().toString().equals(query.getMethod())
                             && mce.getArguments().size() == query.getArguments().size()) {
                         isMethodMatch.set(index, true);
+                        // System.out.println("MCE: " + mce);
                         try {
                             ResolvedMethodDeclaration resolvedMethodDeclaration = mce.resolve();
                             String fullyQualifiedName = resolvedMethodDeclaration.getPackageName() + "."
@@ -373,7 +391,7 @@ public class App {
                                 break;
                             }
                         } catch (UnsolvedSymbolException unsolvedSymbolException) {
-                            isResolved.set(index, false);
+                            // isResolved.set(index, false);
                         }
                     }
                 }
@@ -383,22 +401,22 @@ public class App {
             boolean isSuccess = true;
             
             for (int i = 0; i < queries.size(); i++) {
-                // System.out.println("Query " + (i + 1) + ": " + queries.get(i));
+                System.out.println("Query " + (i + 1) + ": " + queries.get(i));
                 if (isMethodMatch.get(i)) {
                     if (isResolved.get(i)) {
                         if (isResolvedAndParameterMatch.get(i)) {
-                            // System.out.println("Resolved and match argument type");
+                            System.out.println("Resolved and match argument type");
                         } else {
                             isSuccess = false;
-                            // System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
+                            System.out.println("Resolved but argument type doesn't match :" + queries.get(i).getArguments());
                         }
                     } else {
                         isSuccess = false;
-                        // System.out.println("Can't resolve :" + queries.get(i).getMethod());
+                        System.out.println("Can't resolve :" + queries.get(i).getMethod());
                     }
                 } else {
                     isSuccess = false;
-                    // System.out.println("No method match :" + queries.get(i).getMethod());
+                    System.out.println("No method match :" + queries.get(i).getMethod());
                 }
             }
 
@@ -486,6 +504,14 @@ public class App {
             }
         }
 
+        if (prepareQuery(queries).length() > 128) {
+            System.out.println("I'm sorry");
+            System.out.println("Your query length can't more than 128");
+            System.out.println("Your query length are: " + prepareQuery(queries).length());
+            System.out.println("This is github search rule, I can't do anything to tackle this problem");
+            return new ArrayList<Query>();
+        }
+
         return queries;
     }
 
@@ -555,7 +581,7 @@ public class App {
             upper_bound++;
             lower_bound--;
             String size = lower_bound + ".." + upper_bound; // lower_bound < size < upper_bound
-            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+size:" + size
+            this.url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java"
                     + "&" + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
         }
 
@@ -583,8 +609,8 @@ public class App {
             HttpRequest request = HttpRequest.get(url, false).authorization("token " + token.getToken());
             System.out.println();
             System.out.println("Request: " + request);
-            System.out.println("Token: " + token);
-            System.out.println("Thread: " + Thread.currentThread().toString());
+            // System.out.println("Token: " + token);
+            // System.out.println("Thread: " + Thread.currentThread().toString());
 
             // handle response
             responseCode = request.code();
@@ -622,7 +648,7 @@ public class App {
                 }
             } else if (responseCode == UNPROCESSABLE_ENTITY) {
                 System.out.println("Response Code: " + responseCode);
-                System.out.println("Unprocessbale Entity: only the first 1000 search results are available");
+                System.out.println("Unprocessable Entity: only the first 1000 search results are available");
                 System.out.println("See the documentation here: https://developer.github.com/v3/search/");
             } else {
                 System.out.println("Response Code: " + responseCode);
@@ -633,7 +659,6 @@ public class App {
 
         } while (!response_ok && responseCode != UNPROCESSABLE_ENTITY);
 
-        System.out.println("--- " + Thread.currentThread() + " END ");
         synchronizedFeeder.releaseToken(token);
 
         return response;
@@ -649,7 +674,7 @@ public class App {
         String url;
         Response response = new Response();
 
-        url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java+size:" + size + "&"
+        url = endpoint + "?" + PARAM_QUERY + "=" + query + "+in:file+language:java" + "&"
                 + PARAM_PAGE + "=" + page + "&" + PARAM_PER_PAGE + "=" + per_page_limit;
         response = handleGithubRequestWithUrl(url);
 
